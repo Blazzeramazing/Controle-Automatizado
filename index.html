@@ -892,11 +892,15 @@
             // Lógica Unificada para Menus e Popups
             const menuToggleBtn = document.getElementById('menu-toggle-btn');
             const mainMenu = document.getElementById('main-menu');
+            
+            menuToggleBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                mainMenu.classList.toggle('hidden');
+            });
+
             document.addEventListener('click', (e) => {
-                // Lógica do Menu Hamburger
-                if (menuToggleBtn.contains(e.target)) {
-                    mainMenu.classList.toggle('hidden');
-                } else if (!mainMenu.classList.contains('hidden') && !mainMenu.contains(e.target)) {
+                // Lógica para fechar o menu se clicar fora
+                if (!mainMenu.classList.contains('hidden') && !mainMenu.contains(e.target) && !menuToggleBtn.contains(e.target)) {
                     mainMenu.classList.add('hidden');
                 }
 
@@ -1601,9 +1605,117 @@
         };
 
         window.downloadVehicleDetailedPDF = async (entryId) => {
-            /* Implementação de PDF detalhado aqui */
+            loadingOverlay.classList.remove('hidden');
+            loadingText.textContent = 'Gerando PDF detalhado...';
+
+            const entry = vehicleHistoryCache.find(e => e.id === entryId);
+            if (!entry) {
+                showStatusMessage("Registro de auditoria não encontrado.", "error");
+                loadingOverlay.classList.add('hidden');
+                return;
+            }
+
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF();
+            let yPosition = 22;
+
+            doc.setFontSize(18);
+            doc.text(`Relatório Detalhado da Sessão - Placa: ${entry.placa}`, 14, yPosition);
+            yPosition += 10;
+
+            doc.setFontSize(10);
+            doc.setTextColor(100);
+            doc.text(`Doca: ${entry.doca || 'N/A'}`, 14, yPosition);
+            yPosition += 5;
+            doc.text(`Auditor: ${entry.auditorNome} (#${entry.auditorMatricula})`, 14, yPosition);
+            yPosition += 5;
+            doc.text(`Início: ${formatDateTime(entry.dataEntrada)} | Fim: ${formatDateTime(entry.dataSaida)}`, 14, yPosition);
+            yPosition += 10;
+
+            if (Array.isArray(entry.lojas) && entry.lojas.length > 0) {
+                doc.autoTable({
+                    startY: yPosition,
+                    head: [['Lojas de Destino']],
+                    body: entry.lojas.map(l => [`${l.nomeFantasia} (#${l.numero}) - ${l.nomeReal}`]),
+                    theme: 'grid',
+                    headStyles: { fillColor: [14, 116, 144] },
+                });
+                yPosition = doc.lastAutoTable.finalY + 10;
+            }
+
+            const paletes = entry.paletes_escaneados || [];
+            if (paletes.length > 0) {
+                 if (yPosition + 30 > doc.internal.pageSize.getHeight()) {
+                    doc.addPage();
+                    yPosition = 20;
+                }
+                doc.autoTable({
+                    startY: yPosition,
+                    head: [['ID do Palete', 'Operador', 'Itens', 'Peso (Kg)']],
+                    body: paletes.map(p => [p.id, p.operatorName, p.items.join(', '), p.weight]),
+                    theme: 'grid',
+                    didDrawPage: (data) => {
+                        doc.setFontSize(12);
+                        doc.text('Paletes Embarcados', data.settings.margin.left, yPosition - 2);
+                    },
+                    margin: { top: yPosition + 5 },
+                    headStyles: { fillColor: [100, 100, 100] }
+                });
+                yPosition = doc.lastAutoTable.finalY + 10;
+            }
+
+            doc.save(`sessao_detalhada_${entry.placa}_${entry.id.substring(0,6)}.pdf`);
+            loadingOverlay.classList.add('hidden');
         };
         
+        async function downloadVehiclePDF() {
+            loadingOverlay.classList.remove('hidden');
+            loadingText.textContent = 'Gerando Relatório PDF...';
+
+            const startDateStr = document.getElementById('vehicle-filter-start-date').value;
+            const endDateStr = document.getElementById('vehicle-filter-end-date').value;
+            let filteredHistory = vehicleHistoryCache;
+
+            if (startDateStr && endDateStr) {
+                const startDate = new Date(startDateStr + 'T00:00:00');
+                const endDate = new Date(endDateStr + 'T23:59:59');
+                if (startDate > endDate) {
+                    showStatusMessage("A data de início não pode ser maior que a data de fim.", "error");
+                    loadingOverlay.classList.add('hidden');
+                    return;
+                }
+                filteredHistory = vehicleHistoryCache.filter(entry => {
+                    if (!entry.dataSaida) return false;
+                    const exitDate = entry.dataSaida.toDate();
+                    return exitDate >= startDate && exitDate <= endDate;
+                });
+            }
+
+            if (filteredHistory.length === 0) {
+                showStatusMessage("Nenhum registro encontrado para o período selecionado.", "error");
+                loadingOverlay.classList.add('hidden');
+                return;
+            }
+
+            const reportTitle = "Relatório de Sessões de Carregamento";
+            const headers = ["Lojas", "Placa", "Doca", "Auditor", "Início", "Fim", "Paletes Embarcados"];
+            const rows = filteredHistory.map(e => {
+                const storesText = Array.isArray(e.lojas) ? e.lojas.map(l => `${l.nomeFantasia} (#${l.numero})`).join(', ') : ``;
+                return [
+                    storesText,
+                    e.placa,
+                    e.doca || 'N/A',
+                    e.auditorNome,
+                    formatDateTime(e.dataEntrada),
+                    formatDateTime(e.dataSaida),
+                    e.paletes_escaneados ? e.paletes_escaneados.length : 0
+                ]
+            });
+
+            await generateGenericPdf(reportTitle, headers, rows, `relatorio_sessoes_${startDateStr || 'inicio'}_a_${endDateStr || 'fim'}`);
+            loadingOverlay.classList.add('hidden');
+        }
+
         function formatDateTime(timestamp) {
             if (!timestamp) return 'N/A';
             const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
@@ -1622,8 +1734,6 @@
             }
         };
 
-        // ... O restante das funções de prestadores, relatórios, dashboard, etc. permanecem aqui ...
-        // (código omitido por brevidade para focar nas mudanças principais)
         function handleAddMember() {
             const nameInput = document.getElementById('provider-member-name');
             const docInput = document.getElementById('provider-member-doc');
@@ -2037,36 +2147,668 @@
         }
 
         async function downloadProvidersPDF() {
-            /* ... Lógica para PDF de prestadores ... */
+            loadingOverlay.classList.remove('hidden');
+            loadingText.textContent = 'Gerando Relatório PDF...';
+
+            let filteredHistory = providerHistoryCache;
+            const startDateStr = document.getElementById('provider-filter-start-date').value;
+            const endDateStr = document.getElementById('provider-filter-end-date').value;
+
+            if (startDateStr && endDateStr) {
+                const startDate = new Date(startDateStr + 'T00:00:00');
+                const endDate = new Date(endDateStr + 'T23:59:59');
+                if (startDate > endDate) {
+                    showStatusMessage("A data de início não pode ser maior que a data de fim.", "error");
+                    loadingOverlay.classList.add('hidden');
+                    return;
+                }
+                filteredHistory = providerHistoryCache.filter(p => {
+                    if (!p.exitTime) return false;
+                    const exitDate = p.exitTime.toDate();
+                    return exitDate >= startDate && exitDate <= endDate;
+                });
+            }
+
+            if (filteredHistory.length === 0) {
+                showStatusMessage("Nenhum histórico de serviço para exportar.", "error");
+                loadingOverlay.classList.add('hidden');
+                return;
+            }
+
+            const reportTitle = "Relatório de Prestadores de Serviço";
+            const headers = ["Empresa", "Lojas", "Equipe", "Descrição", "Entrada", "Saída"];
+            const rows = filteredHistory.map(p => {
+                const team = Array.isArray(p.team) ? p.team.map(m => `${m.name} (${m.doc})`).join(', ') : 'N/A';
+                const storesText = Array.isArray(p.lojas) ? p.lojas.map(l => `${l.nomeFantasia} (#${l.numero})`).join(', ') : p.storeName;
+                return [p.company, storesText, team, p.description, formatDateTime(p.entryTime), formatDateTime(p.exitTime)];
+            });
+            
+            await generateGenericPdf(reportTitle, headers, rows, `relatorio_servicos_${startDateStr}_a_${endDateStr}`);
+            loadingOverlay.classList.add('hidden');
         }
         
-        // --- FUNÇÕES DE RELATÓRIOS ---
-        const handleReportFileSelect = (event) => { /* ... */ };
-        async function handleAddReport(e) { /* ... */ }
-        function listenForReports() { /* ... */ }
-        function renderReportsPage() { /* ... */ }
-        window.changeReportsPage = (page) => { /* ... */ };
-        window.toggleReportContent = (reportId, showFull) => { /* ... */ };
-        window.deleteReport = async (reportId) => { /* ... */ };
-        window.generateReportPdf = async (reportId) => { /* ... */ };
+        const handleReportFileSelect = (event) => {
+            const previewContainer = document.getElementById('report-image-previews');
+            const files = Array.from(event.target.files);
 
-        // --- FUNÇÕES DO DASHBOARD ---
-        function setDefaultDateFilters() { /* ... */ }
-        function updateDashboard() { /* ... */ }
-        function updateKPIs(vehicleData, providerData) { /* ... */ }
-        function getTopN(data, key, n) { /* ... */ }
-        function renderCombinedEntriesOverTime(vehicleData, providerData) { /* ... */ }
-        function renderActivityByHour(vehicleData, providerData) { /* ... */ }
-        function renderActivityByWeekday(vehicleData, providerData) { /* ... */ }
-        function renderTopNChart(canvasId, data, key, label) { /* ... */ }
-        function renderChart(canvasId, config) { /* ... */ }
+            files.forEach(file => {
+                if (!file.type.startsWith('image/')) return;
 
-        // --- FUNÇÕES UTILITÁRIAS ---
-        function renderPaginationControls(type, totalPages, currentPage, changePageFn) { /* ... */ }
-        async function generateGenericPdf(title, headers, rows, filename) { /* ... */ }
-        window.toggleTeamList = (providerId, showExpanded) => { /* ... */ };
-        window.toggleProviderStoreList = (providerId, showExpanded) => { /* ... */ };
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    const img = new Image();
+                    img.onload = () => {
+                        const MAX_WIDTH = 800;
+                        const MAX_HEIGHT = 800;
+                        let width = img.width;
+                        let height = img.height;
 
+                        if (width > height) {
+                            if (width > MAX_WIDTH) {
+                                height *= MAX_WIDTH / width;
+                                width = MAX_WIDTH;
+                            }
+                        } else {
+                            if (height > MAX_HEIGHT) {
+                                width *= MAX_HEIGHT / height;
+                                height = MAX_HEIGHT;
+                            }
+                        }
+
+                        const canvas = document.createElement('canvas');
+                        canvas.width = width;
+                        canvas.height = height;
+                        const ctx = canvas.getContext('2d');
+                        ctx.drawImage(img, 0, 0, width, height);
+                        
+                        const compressedImgData = canvas.toDataURL('image/jpeg', 0.7);
+                        
+                        currentReportImages.push(compressedImgData);
+
+                        const imgPreviewWrapper = document.createElement('div');
+                        imgPreviewWrapper.className = 'relative group aspect-square';
+                        imgPreviewWrapper.innerHTML = `
+                            <img src="${compressedImgData}" class="w-full h-full object-cover rounded-lg border border-slate-700">
+                            <div class="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-60 flex items-center justify-center rounded-lg">
+                                <button type="button" class="remove-report-photo-btn text-white opacity-0 group-hover:opacity-100 p-2 bg-red-600 rounded-full">
+                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+                                </button>
+                            </div>
+                        `;
+                        
+                        imgPreviewWrapper.querySelector('.remove-report-photo-btn').addEventListener('click', () => {
+                            const index = currentReportImages.indexOf(compressedImgData);
+                            if (index > -1) {
+                                currentReportImages.splice(index, 1);
+                            }
+                            imgPreviewWrapper.remove();
+                        });
+                        previewContainer.appendChild(imgPreviewWrapper);
+                    };
+                    img.src = e.target.result;
+                };
+                reader.readAsDataURL(file);
+            });
+            event.target.value = '';
+        };
+
+        async function handleAddReport(e) {
+            e.preventDefault();
+            if (!currentUserId) return;
+            const form = e.target;
+            const newReport = {
+                title: form.querySelector('#report-title').value,
+                content: form.querySelector('#report-content').value,
+                images: currentReportImages,
+                createdAt: new Date()
+            };
+
+            try {
+                await addDoc(collection(db, getCollectionPath('relatorios')), newReport);
+                showStatusMessage("Relatório salvo com sucesso!");
+                form.reset();
+                currentReportImages = [];
+                document.getElementById('report-image-previews').innerHTML = '';
+            } catch (error) {
+                console.error("Erro ao salvar relatório: ", error);
+                showStatusMessage("Erro ao salvar o relatório. Tente novamente.", "error");
+            }
+        }
+
+        function listenForReports() {
+            if (!currentUserId) return;
+            const reportsCol = collection(db, getCollectionPath('relatorios'));
+            onSnapshot(reportsCol, (snapshot) => {
+                reportsCache = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))
+                                         .sort((a,b) => b.createdAt.toDate() - a.createdAt.toDate());
+                reportsCurrentPage = 1;
+                renderReportsPage();
+            });
+        }
+        
+        function renderReportsPage() {
+            const listEl = document.getElementById('reports-list');
+            listEl.innerHTML = '';
+
+            if (reportsCache.length === 0) {
+                listEl.innerHTML = '<p class="text-slate-500">Nenhum relatório cadastrado.</p>';
+                renderPaginationControls('reports', 0, reportsCurrentPage, changeReportsPage);
+                return;
+            }
+            
+            const startIndex = (reportsCurrentPage - 1) * reportsPerPage;
+            const endIndex = startIndex + reportsPerPage;
+            const reportsToShow = reportsCache.slice(startIndex, endIndex);
+
+            reportsToShow.forEach(report => {
+                const div = document.createElement('div');
+                div.className = 'p-4 bg-slate-900/50 border border-slate-700 rounded-lg flex flex-col gap-4';
+                const isLong = report.content.length > 150;
+                const truncatedContent = isLong ? report.content.substring(0, 150) + '...' : report.content;
+
+                let imagesHtml = '';
+                if (report.images && report.images.length > 0) {
+                    imagesHtml += '<div class="grid grid-cols-4 gap-2 mt-2">';
+                    report.images.forEach(imgSrc => {
+                        imagesHtml += `<div class="aspect-square"><img src="${imgSrc}" class="w-full h-full object-cover rounded-md border border-slate-700"></div>`;
+                    });
+                    imagesHtml += '</div>';
+                }
+
+                div.innerHTML = `
+                    <div>
+                        <div class="flex justify-between items-start">
+                            <div class="min-w-0 flex-1">
+                                <h4 class="font-bold text-lg text-slate-200">${report.title}</h4>
+                                <p class="text-sm text-slate-400 mb-2">${formatDateTime(report.createdAt)}</p>
+                                <div id="report-content-${report.id}">
+                                    <p class="text-slate-300 whitespace-pre-wrap break-words">${truncatedContent}</p>
+                                    ${isLong ? `<button class="text-cyan-400 hover:underline text-sm mt-2" onclick="toggleReportContent('${report.id}', true)">Ver mais</button>` : ''}
+                                </div>
+                                <div id="report-full-content-${report.id}" class="hidden">
+                                    <p class="text-slate-300 whitespace-pre-wrap break-words">${report.content}</p>
+                                    <button class="text-cyan-400 hover:underline text-sm mt-2" onclick="toggleReportContent('${report.id}', false)">Ver menos</button>
+                                </div>
+                                ${imagesHtml}
+                            </div>
+                            <button class="text-red-500 hover:text-red-400 font-bold text-2xl leading-none ml-4 flex-shrink-0" onclick="deleteReport('${report.id}')">&times;</button>
+                        </div>
+                    </div>
+                    <div class="border-t border-slate-700 pt-3 flex justify-end">
+                         <button class="bg-green-600/80 text-white font-bold py-2 px-4 rounded-lg hover:bg-green-600 text-sm" onclick="generateReportPdf('${report.id}')">
+                            Exportar PDF
+                        </button>
+                    </div>
+                `;
+                listEl.appendChild(div);
+            });
+
+            renderPaginationControls('reports', Math.ceil(reportsCache.length / reportsPerPage), reportsCurrentPage, changeReportsPage);
+        }
+        
+        window.changeReportsPage = (page) => {
+            reportsCurrentPage = page;
+            renderReportsPage();
+        }
+
+        window.toggleReportContent = (reportId, showFull) => {
+            const truncatedDiv = document.getElementById(`report-content-${reportId}`);
+            const fullDiv = document.getElementById(`report-full-content-${reportId}`);
+            if (showFull) {
+                truncatedDiv.classList.add('hidden');
+                fullDiv.classList.remove('hidden');
+            } else {
+                truncatedDiv.classList.remove('hidden');
+                fullDiv.classList.add('hidden');
+            }
+        };
+
+        window.toggleTeamList = (providerId, showExpanded) => {
+            const collapsedDiv = document.getElementById(`history-team-collapsed-${providerId}`);
+            const expandedDiv = document.getElementById(`history-team-expanded-${providerId}`);
+            if (showExpanded) {
+                collapsedDiv.classList.add('hidden');
+                expandedDiv.classList.remove('hidden');
+            } else {
+                collapsedDiv.classList.remove('hidden');
+                expandedDiv.classList.add('hidden');
+            }
+        };
+
+        window.deleteReport = async (reportId) => {
+            if (!currentUserId) return;
+            if (confirm('Tem certeza que deseja excluir este relatório?')) {
+                try {
+                    await deleteDoc(doc(db, getCollectionPath('relatorios'), reportId));
+                    showStatusMessage('Relatório excluído com sucesso.');
+                } catch (error) {
+                    console.error("Erro ao excluir relatório:", error);
+                    showStatusMessage("Não foi possível excluir o relatório.", "error");
+                }
+            }
+        };
+
+        window.toggleProviderStoreList = (providerId, showExpanded) => {
+            const collapsedDiv = document.getElementById(`history-provider-stores-collapsed-${providerId}`);
+            const expandedDiv = document.getElementById(`history-provider-stores-expanded-${providerId}`);
+            if (showExpanded) {
+                collapsedDiv.classList.add('hidden');
+                expandedDiv.classList.remove('hidden');
+            } else {
+                collapsedDiv.classList.remove('hidden');
+                expandedDiv.classList.add('hidden');
+            }
+        };
+
+        window.generateReportPdf = async (reportId) => {
+            loadingOverlay.classList.remove('hidden');
+            loadingText.textContent = 'Gerando PDF do Relatório...';
+
+            const report = reportsCache.find(r => r.id === reportId);
+            if (!report) {
+                showStatusMessage("Relatório não encontrado.", "error");
+                loadingOverlay.classList.add('hidden');
+                return;
+            }
+
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF();
+
+            const margin = 15;
+            const pageWidth = doc.internal.pageSize.getWidth();
+            const pageHeight = doc.internal.pageSize.getHeight();
+            const usableWidth = pageWidth - 2 * margin;
+
+            doc.setFontSize(20);
+            doc.setFont('helvetica', 'bold');
+            doc.text(report.title, margin, 20);
+
+            doc.setFontSize(10);
+            doc.setFont('helvetica', 'normal');
+            doc.setTextColor(100);
+            doc.text(`Data: ${formatDateTime(report.createdAt)}`, margin, 28);
+
+            doc.setFontSize(12);
+            doc.setTextColor(0);
+            const splitContent = doc.splitTextToSize(report.content, usableWidth);
+            let yPosition = 40;
+            doc.text(splitContent, margin, yPosition);
+            yPosition += (splitContent.length * 7) + 10; 
+
+            if (report.images && report.images.length > 0) {
+                for (const [index, imgSrc] of report.images.entries()) {
+                    if (yPosition > pageHeight - margin - 60) {
+                        doc.addPage();
+                        yPosition = margin;
+                    }
+
+                    try {
+                        doc.text(`Imagem ${index + 1}:`, margin, yPosition);
+                        yPosition += 5;
+                        
+                        const imgHeight = (usableWidth * 9) / 16;
+                        doc.addImage(imgSrc, 'JPEG', margin, yPosition, usableWidth, imgHeight); 
+                        yPosition += imgHeight + 10;
+                    } catch (e) {
+                        console.error("Erro ao adicionar imagem ao PDF:", e);
+                        doc.text(`[Erro ao carregar imagem ${index + 1}]`, margin, yPosition);
+                        yPosition += 15;
+                    }
+                }
+            }
+
+            doc.save(`relatorio_${report.title.replace(/\s+/g, '_')}_${report.id.substring(0, 6)}.pdf`);
+            
+            loadingOverlay.classList.add('hidden');
+        };
+
+        function setDefaultDateFilters() {
+            const endDateEl = document.getElementById('dash-end-date');
+            const startDateEl = document.getElementById('dash-start-date');
+
+            if (!endDateEl.value) {
+                const today = new Date();
+                endDateEl.value = today.toISOString().split('T')[0];
+            }
+
+            if (!startDateEl.value) {
+                const thirtyDaysAgo = new Date();
+                thirtyDaysAgo.setDate(new Date().getDate() - 30);
+                startDateEl.value = thirtyDaysAgo.toISOString().split('T')[0];
+            }
+        }
+
+        function updateDashboard() {
+            setDefaultDateFilters();
+            
+            const startDateStr = document.getElementById('dash-start-date').value;
+            const endDateStr = document.getElementById('dash-end-date').value;
+
+            const startDate = new Date(startDateStr + 'T00:00:00');
+            const endDate = new Date(endDateStr + 'T23:59:59');
+
+            const filteredVehicleData = vehicleHistoryCache.filter(entry => {
+                if (!entry.dataSaida) return false;
+                const exitDate = entry.dataSaida.toDate();
+                return exitDate >= startDate && exitDate <= endDate;
+            });
+            const filteredProviderData = providerHistoryCache.filter(p => {
+                if (!p.exitTime) return false;
+                const exitDate = p.exitTime.toDate();
+                return exitDate >= startDate && exitDate <= endDate;
+            });
+
+            const chartsContainer = document.getElementById('charts-container');
+            const noDataMessage = document.getElementById('no-data-message');
+            const kpiContainer = document.getElementById('kpi-container');
+
+            if (filteredVehicleData.length === 0 && filteredProviderData.length === 0) {
+                chartsContainer.classList.add('hidden');
+                kpiContainer.classList.add('hidden');
+                noDataMessage.classList.remove('hidden');
+                Object.values(chartInstances).forEach(chart => chart.destroy());
+                chartInstances = {};
+                return;
+            }
+
+            chartsContainer.classList.remove('hidden');
+            kpiContainer.classList.remove('hidden');
+            noDataMessage.classList.add('hidden');
+
+            updateKPIs(filteredVehicleData, filteredProviderData);
+            
+            renderCombinedEntriesOverTime(filteredVehicleData, filteredProviderData);
+            renderActivityByHour(filteredVehicleData, filteredProviderData);
+            renderActivityByWeekday(filteredVehicleData, filteredProviderData);
+            renderTopNChart('topStoresChart', filteredVehicleData, 'lojas', 'Top 5 Lojas (Carga/Descarga)');
+            renderTopNChart('topCompaniesChart', filteredProviderData, 'company', 'Top 5 Empresas de Serviço');
+        }
+
+        function updateKPIs(vehicleData, providerData) {
+            document.getElementById('kpi-total-entries').textContent = vehicleData.length;
+            document.getElementById('kpi-total-services').textContent = providerData.length;
+
+            const totalDwellTime = vehicleData.reduce((acc, entry) => {
+                if (entry.dataEntrada && entry.dataSaida) {
+                    const dwell = entry.dataSaida.toDate() - entry.dataEntrada.toDate();
+                    return acc + dwell;
+                }
+                return acc;
+            }, 0);
+            const avgDwellTimeMs = vehicleData.length > 0 ? totalDwellTime / vehicleData.length : 0;
+            const avgDwellTimeMin = Math.round(avgDwellTimeMs / 60000);
+            document.getElementById('kpi-avg-time').textContent = `${avgDwellTimeMin} min`;
+        }
+        
+        function getTopN(data, key, n) {
+            const counts = data.reduce((acc, entry) => {
+                if (key === 'lojas') {
+                    if (Array.isArray(entry.lojas)) {
+                        entry.lojas.forEach(loja => {
+                            const item = loja.nomeFantasia;
+                            if(item) acc[item] = (acc[item] || 0) + 1;
+                        });
+                    }
+                } else {
+                    const item = entry[key];
+                    if(item) acc[item] = (acc[item] || 0) + 1;
+                }
+                return acc;
+            }, {});
+
+            return Object.entries(counts)
+                .sort(([, a], [, b]) => b - a)
+                .slice(0, n)
+                .map(([label, count]) => ({ label, count }));
+        }
+
+        function renderCombinedEntriesOverTime(vehicleData, providerData) {
+            const combinedData = {};
+            vehicleData.forEach(entry => {
+                if(entry.dataSaida) {
+                    const day = entry.dataSaida.toDate().toISOString().split('T')[0];
+                    if(!combinedData[day]) combinedData[day] = { vehicles: 0, providers: 0 };
+                    combinedData[day].vehicles++;
+                }
+            });
+            providerData.forEach(entry => {
+                if(entry.exitTime) {
+                    const day = entry.exitTime.toDate().toISOString().split('T')[0];
+                    if(!combinedData[day]) combinedData[day] = { vehicles: 0, providers: 0 };
+                    combinedData[day].providers++;
+                }
+            });
+
+            const sortedDays = Object.keys(combinedData).sort();
+            const labels = sortedDays.map(day => new Date(day + 'T00:00:00').toLocaleDateString('pt-BR', {day: '2-digit', month: '2-digit'}));
+            const vehicleCounts = sortedDays.map(day => combinedData[day].vehicles);
+            const providerCounts = sortedDays.map(day => combinedData[day].providers);
+
+            const config = {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [
+                        { 
+                            label: 'Auditorias', 
+                            data: vehicleCounts, 
+                            borderColor: '#06b6d4',
+                            backgroundColor: 'rgba(6, 182, 212, 0.15)',
+                            fill: true, tension: 0.4,
+                            pointBackgroundColor: '#06b6d4', pointBorderColor: '#0f172a',
+                            pointHoverBackgroundColor: '#fff', pointHoverBorderColor: '#06b6d4'
+                        },
+                        { 
+                            label: 'Serviços', 
+                            data: providerCounts, 
+                            borderColor: '#22c55e',
+                            backgroundColor: 'rgba(34, 197, 94, 0.15)',
+                            fill: true, tension: 0.4,
+                            pointBackgroundColor: '#22c55e', pointBorderColor: '#0f172a',
+                            pointHoverBackgroundColor: '#fff', pointHoverBorderColor: '#22c55e'
+                        }
+                    ]
+                },
+                options: { 
+                    responsive: true, maintainAspectRatio: false,
+                    scales: { y: { beginAtZero: true, grid: { color: Chart.defaults.borderColor } }, x: { grid: { color: Chart.defaults.borderColor } } },
+                    plugins: { legend: { position: 'top', labels: { color: '#e2e8f0' } } },
+                    interaction: { intersect: false, mode: 'index' }
+                }
+            };
+            renderChart('entriesOverTimeChart', config);
+        }
+
+        function renderActivityByHour(vehicleData, providerData) {
+            const hours = Array(24).fill(0);
+            vehicleData.forEach(e => hours[e.dataEntrada.toDate().getHours()]++);
+            providerData.forEach(p => hours[p.entryTime.toDate().getHours()]++);
+            
+            const ctx = document.getElementById('activityByHourChart').getContext('2d');
+            const gradient = ctx.createLinearGradient(0, 0, 0, 320);
+            gradient.addColorStop(0, 'rgba(251, 191, 36, 1)');
+            gradient.addColorStop(1, 'rgba(217, 119, 6, 0.7)');
+
+            const config = {
+                type: 'bar',
+                data: {
+                    labels: Array.from({length: 24}, (_, i) => `${String(i).padStart(2, '0')}h`),
+                    datasets: [{
+                        label: 'Total de Entradas por Hora',
+                        data: hours,
+                        backgroundColor: gradient,
+                        borderRadius: 4
+                    }]
+                },
+                options: { 
+                    responsive: true, 
+                    maintainAspectRatio: false, 
+                    plugins: { legend: { display: false } },
+                    scales: { y: { beginAtZero: true, grid: { color: Chart.defaults.borderColor } }, x: { grid: { color: Chart.defaults.borderColor } } }
+                }
+            };
+            renderChart('activityByHourChart', config);
+        }
+
+        function renderActivityByWeekday(vehicleData, providerData) {
+            const weekdays = Array(7).fill(0);
+            const weekdayLabels = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
+            vehicleData.forEach(e => weekdays[e.dataEntrada.toDate().getDay()]++);
+            providerData.forEach(p => weekdays[p.entryTime.toDate().getDay()]++);
+
+            const ctx = document.getElementById('activityByWeekdayChart').getContext('2d');
+            const gradient = ctx.createLinearGradient(0, 0, 0, 320);
+            gradient.addColorStop(0, 'rgba(236, 72, 153, 1)');
+            gradient.addColorStop(1, 'rgba(190, 24, 93, 0.7)');
+
+            const config = {
+                type: 'bar',
+                data: {
+                    labels: weekdayLabels,
+                    datasets: [{
+                        label: 'Total de Entradas por Dia da Semana',
+                        data: weekdays,
+                        backgroundColor: gradient,
+                        borderRadius: 4
+                    }]
+                },
+                options: { 
+                    responsive: true, 
+                    maintainAspectRatio: false, 
+                    plugins: { legend: { display: false } },
+                    scales: { y: { beginAtZero: true, grid: { color: Chart.defaults.borderColor } }, x: { grid: { color: Chart.defaults.borderColor } } }
+                }
+            };
+            renderChart('activityByWeekdayChart', config);
+        }
+
+        function renderTopNChart(canvasId, data, key, label) {
+            const topData = getTopN(data, key, 5);
+            const labels = topData.map(d => d.label);
+            const counts = topData.map(d => d.count);
+            
+            const colors = {
+                'topStoresChart': ['#2563eb', '#3b82f6', '#60a5fa', '#93c5fd', '#bfdbfe'],
+                'topCompaniesChart': ['#15803d', '#16a34a', '#22c55e', '#4ade80', '#86efac']
+            };
+
+            const config = {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: label,
+                        data: counts,
+                        backgroundColor: colors[canvasId] || 'rgba(107, 114, 128, 0.7)',
+                        borderRadius: 4
+                    }]
+                },
+                options: { 
+                    indexAxis: 'y', 
+                    responsive: true, 
+                    maintainAspectRatio: false, 
+                    plugins: { legend: { display: false } },
+                    scales: { 
+                        x: { 
+                            beginAtZero: true,
+                            ticks: {
+                                stepSize: 1,
+                                callback: function(value) {if (Number.isInteger(value)) {return value;}}
+                            },
+                            grid: { color: Chart.defaults.borderColor }
+                        },
+                        y: { grid: { color: 'transparent' } }
+                    } 
+                }
+            };
+            renderChart(canvasId, config);
+        }
+
+        function renderChart(canvasId, config) {
+            if (chartInstances[canvasId]) {
+                chartInstances[canvasId].destroy();
+            }
+            const ctx = document.getElementById(canvasId).getContext('2d');
+            chartInstances[canvasId] = new Chart(ctx, config);
+        }
+        
+        function renderPaginationControls(type, totalPages, currentPage, changePageFn) {
+            const paginationEl = document.getElementById(`${type}-pagination-controls`);
+            if (!paginationEl) return;
+            paginationEl.innerHTML = '';
+
+            if (totalPages <= 1) return;
+
+            const createButton = (page, text = page) => {
+                const button = document.createElement('button');
+                button.textContent = text;
+                button.className = `px-3 py-1 rounded-md text-sm transition-colors ${page === currentPage ? 'bg-cyan-600 text-white font-bold' : 'text-slate-400 hover:bg-slate-700 hover:text-cyan-300'}`;
+                if (page) {
+                    button.onclick = () => changePageFn(page);
+                } else {
+                    button.className = 'px-3 py-1 text-slate-500 cursor-default';
+                    button.disabled = true;
+                }
+                return button;
+            };
+
+            const prevButton = document.createElement('button');
+            prevButton.textContent = '«';
+            prevButton.className = 'px-3 py-1 rounded-md text-sm text-cyan-400 hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed';
+            prevButton.disabled = currentPage === 1;
+            prevButton.onclick = () => changePageFn(currentPage - 1);
+            paginationEl.appendChild(prevButton);
+
+            const pagesToShow = [];
+            if (totalPages <= 7) {
+                for (let i = 1; i <= totalPages; i++) {
+                    pagesToShow.push(i);
+                }
+            } else {
+                pagesToShow.push(1);
+                if (currentPage > 3) pagesToShow.push('...');
+                if (currentPage > 2) pagesToShow.push(currentPage - 1);
+                if (currentPage !== 1 && currentPage !== totalPages) pagesToShow.push(currentPage);
+                if (currentPage < totalPages - 1) pagesToShow.push(currentPage + 1);
+                if (currentPage < totalPages - 2) pagesToShow.push('...');
+                pagesToShow.push(totalPages);
+            }
+            
+            [...new Set(pagesToShow)].forEach(page => {
+                paginationEl.appendChild(createButton(page === '...' ? null : page, page));
+            });
+
+            const nextButton = document.createElement('button');
+            nextButton.textContent = '»';
+            nextButton.className = 'px-3 py-1 rounded-md text-sm text-cyan-400 hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed';
+            nextButton.disabled = currentPage === totalPages;
+            nextButton.onclick = () => changePageFn(currentPage + 1);
+            paginationEl.appendChild(nextButton);
+        }
+
+        async function generateGenericPdf(title, headers, rows, filename) {
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF({ orientation: "landscape" });
+
+            doc.setFontSize(18);
+            doc.text(title, 14, 22);
+            doc.setFontSize(11);
+            doc.setTextColor(100);
+            doc.text(`Relatório gerado em: ${new Date().toLocaleString('pt-BR')}`, 14, 30);
+
+            doc.autoTable({
+                head: [headers],
+                body: rows,
+                startY: 35,
+                theme: 'grid',
+                headStyles: { fillColor: [14, 116, 144] }, // tom de ciano escuro
+                styles: { fontSize: 8 },
+                margin: { top: 30 }
+            });
+
+            doc.save(`${filename}.pdf`);
+        }
+        
     </script>
 </body>
 </html>
