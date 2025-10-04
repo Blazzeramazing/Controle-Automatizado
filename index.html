@@ -969,11 +969,12 @@
  				 mainMenu.classList.toggle('hidden');
  			 });
 
- 			 document.querySelectorAll('#main-menu .tab-button').forEach(button => {
- 				 button.addEventListener('click', () => {
+ 			 mainMenu.addEventListener('click', (e) => {
+ 				 const button = e.target.closest('.tab-button');
+ 				 if (button) {
  					 const tabName = button.id.replace('tab-btn-', '');
  					 showTab(tabName);
- 				 });
+ 				 }
  			 });
 
  			 document.addEventListener('click', (e) => {
@@ -3207,5 +3208,4 @@
  	 </script>
  </body>
  </html>
-
 
