@@ -1541,7 +1541,7 @@
 
             printableArea.innerHTML = `
                 <div id="pallet-label-content" class="p-4 bg-white text-black" style="width: 400px; font-family: sans-serif;">
-                    <div id="qr-code-container" class="mx-auto my-2 w-32 h-32"></div>
+                    <div id="qr-code-container" class="mx-auto my-2 w-32 h-32 flex items-center justify-center"></div>
                     <p class="text-center text-sm font-mono mt-1">${palletId}</p>
                     <div class="text-left text-xs space-y-1 mt-3 border-t border-black pt-2">
                         <p><strong>Loja Destino:</strong> ${palletData.lojaDestino.nomeFantasia}</p>
@@ -1559,7 +1559,8 @@
             const qr = qrcode(4, 'L');
             qr.addData(palletId);
             qr.make();
-            qrContainer.innerHTML = qr.createImgTag(4, 0);
+            // Adiciona uma margem (quiet zone) para melhorar a leitura
+            qrContainer.innerHTML = qr.createImgTag(4, 4); 
 
             // Aguarda um pequeno instante para garantir que a imagem do QR code foi renderizada no DOM
             await new Promise(resolve => setTimeout(resolve, 200));
@@ -1567,7 +1568,7 @@
             const labelElement = document.getElementById('pallet-label-content');
 
             try {
-                const canvas = await html2canvas(labelElement, { scale: 3 });
+                const canvas = await html2canvas(labelElement, { scale: 3 }); // scale: 3 para melhor qualidade
                 const imgData = canvas.toDataURL('image/png');
                 
                 const { jsPDF } = window.jspdf;
@@ -1578,7 +1579,22 @@
                     format: [100, 150] 
                 });
 
-                pdf.addImage(imgData, 'PNG', 5, 5, 90, 140); // Adiciona com margens
+                const pdfPageWidth = pdf.internal.pageSize.getWidth();
+                const pdfPageHeight = pdf.internal.pageSize.getHeight();
+                
+                // Define a largura da imagem no PDF, com margens
+                const imgWidthInPdf = pdfPageWidth - 10; // 5mm de margem de cada lado
+                
+                // Calcula a altura proporcional para não distorcer
+                const canvasAspectRatio = canvas.height / canvas.width;
+                const imgHeightInPdf = imgWidthInPdf * canvasAspectRatio;
+
+                // Centraliza a imagem na página
+                const x = (pdfPageWidth - imgWidthInPdf) / 2;
+                let y = (pdfPageHeight - imgHeightInPdf) / 2;
+                if (y < 5) y = 5; // Garante uma margem mínima no topo
+
+                pdf.addImage(imgData, 'PNG', x, y, imgWidthInPdf, imgHeightInPdf); 
                 pdf.save(`etiqueta_palete_${palletId.substring(0, 6)}.pdf`);
                 showStatusMessage("Etiqueta PDF gerada com sucesso!");
 
@@ -3735,3 +3751,4 @@
     </script>
 </body>
 </html>
+
