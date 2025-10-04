@@ -799,6 +799,7 @@
         let stockItemsCache = [];
         let ordersCache = [];
         let palletsCache = []; // Cache para o novo histórico de paletes
+        let activeEntriesCache = []; // <-- NOVO: Cache dedicado para sessões ativas
         let vehicleHistoryCache = [];
         let providerHistoryCache = [];
         let reportsCache = [];
@@ -1002,7 +1003,13 @@
             el.innerHTML = message;
             const successClasses = 'bg-green-500/20 text-green-300 border border-green-500/30';
             const errorClasses = 'bg-red-500/20 text-red-300 border border-red-500/30';
-            el.className = `p-4 mb-4 text-sm rounded-lg ${type === 'error' ? errorClasses : successClasses}`;
+            const warnClasses = 'bg-yellow-500/20 text-yellow-300 border border-yellow-500/30';
+
+            let typeClasses = successClasses;
+            if (type === 'error') typeClasses = errorClasses;
+            if (type === 'warn') typeClasses = warnClasses;
+            
+            el.className = `p-4 mb-4 text-sm rounded-lg ${typeClasses}`;
             el.classList.remove('hidden');
 
             if (type === 'success' && context !== 'auth') {
@@ -1615,9 +1622,18 @@
                 return;
             }
 
-            const allActiveEntries = ordersCache.filter(e => e.status === 'ativo');
-            const currentEntry = vehicleHistoryCache.concat(allActiveEntries).find(e => e.id === entryId);
-            
+            // CORREÇÃO: Busca a sessão ativa a partir do cache confiável 'activeEntriesCache'.
+            const currentEntry = activeEntriesCache.find(e => e.id === entryId);
+
+            // Adiciona uma verificação para garantir que a sessão foi encontrada.
+            if (!currentEntry) {
+                addScanLog(`ERRO: Sessão de carregamento ${entryId} não encontrada ou não está mais ativa.`, 'error');
+                closeAuditModal();
+                showStatusMessage("A sessão de carregamento não foi encontrada ou foi finalizada.", "warn");
+                return;
+            }
+
+            const entryDocRef = doc(db, getCollectionPath('sessoes_carregamento'), entryId);
             const scanInput = document.getElementById('qr-scan-input');
             scanInput.disabled = true;
 
@@ -1645,12 +1661,8 @@
                     return;
                 }
                 
-                // Adiciona o palete à sessão de carregamento atual
-                const entryDocRef = doc(db, getCollectionPath('sessoes_carregamento'), entryId);
                 const updatedScannedPallets = [...(currentEntry.paletes_escaneados || []), palletData];
                 await updateDoc(entryDocRef, { paletes_escaneados: updatedScannedPallets });
-
-                // Atualiza o status do palete
                 await updateDoc(palletDocRef, { status: 'embarcado', cargaId: entryId, embarcadoEm: serverTimestamp() });
                 
                 addScanLog(`Palete ${palletId} validado e embarcado!`, 'success');
@@ -1920,28 +1932,27 @@
             if (!currentUserId) return;
             const entriesCol = collection(db, getCollectionPath('sessoes_carregamento'));
             onSnapshot(entriesCol, (snapshot) => {
+                const allEntries = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+
+                // CORREÇÃO: Popula o novo cache de sessões ativas
+                activeEntriesCache = allEntries.filter(e => e.status === 'ativo').sort((a,b) => (b.dataEntrada?.toDate() || 0) - (a.dataEntrada?.toDate() || 0));
+                
                 const activeListEl = document.getElementById('active-entries-list');
                 activeListEl.innerHTML = '';
-                let allEntries = [];
-
-                snapshot.docs.forEach(doc => {
-                    allEntries.push({ id: doc.id, ...doc.data() });
-                });
-                
-                const activeEntries = allEntries.filter(e => e.status === 'ativo').sort((a,b) => (b.dataEntrada?.toDate() || 0) - (a.dataEntrada?.toDate() || 0));
-                
-                if (activeEntries.length === 0) {
-                     activeListEl.innerHTML = '<p class="text-slate-500">Nenhuma sessão de carregamento ativa no momento.</p>';
+                if (activeEntriesCache.length === 0) {
+                        activeListEl.innerHTML = '<p class="text-slate-500">Nenhuma sessão de carregamento ativa no momento.</p>';
                 } else {
-                     activeEntries.forEach(renderActiveEntry);
+                        activeEntriesCache.forEach(renderActiveEntry);
                 }
 
                 vehicleHistoryCache = allEntries.filter(e => e.status !== 'ativo').sort((a,b) => {
                     if (!a.dataSaida || !b.dataSaida) return 0;
                     return (b.dataSaida?.toDate() || 0) - (a.dataSaida?.toDate() || 0)
                 });
-                vehicleHistoryCurrentPage = 1;
-                renderVehicleHistoryPage();
+                
+                if (!document.getElementById('tab-control').classList.contains('hidden')) {
+                    renderVehicleHistoryPage();
+                }
                 
                 const openAuditModal = document.getElementById('audit-modal');
                 if (!openAuditModal.classList.contains('hidden')) {
@@ -1949,9 +1960,11 @@
                     const updatedEntry = allEntries.find(e => e.id === entryId);
                     if(updatedEntry) {
                         updateAuditModalUI(updatedEntry);
+                    } else {
+                        closeAuditModal();
+                        showStatusMessage("A sessão de carregamento foi finalizada.", "warn");
                     }
                 }
-
             }, (error) => {
                 console.error("Erro ao escutar sessões:", error);
                 showStatusMessage("Não foi possível carregar as sessões.", "error");
@@ -1982,19 +1995,26 @@
         // --- LÓGICA DO MODAL DE AUDITORIA E SCANNER --- 
         
         window.openAuditModal = (entryId) => {
-            const allActiveEntries = ordersCache.filter(e => e.status === 'ativo');
-            const entry = vehicleHistoryCache.concat(allActiveEntries).find(e => e && e.id === entryId);
-
-            if (!entry) {
+            // CORREÇÃO: Busca a sessão diretamente do cache de sessões ativas.
+            const entry = activeEntriesCache.find(e => e.id === entryId);
+            
+            if (entry) {
+                _populateAuditModal(entry);
+            } else {
+                console.warn(`Sessão ${entryId} não encontrada no cache ativo, buscando no DB como fallback.`);
                 const docRef = doc(db, getCollectionPath('sessoes_carregamento'), entryId);
                 getDoc(docRef).then(docSnap => {
                     if (docSnap.exists()) {
                         const freshEntry = { id: docSnap.id, ...docSnap.data() };
-                        _populateAuditModal(freshEntry);
+                        if (freshEntry.status === 'ativo') {
+                            _populateAuditModal(freshEntry);
+                        } else {
+                            showStatusMessage("Esta sessão de carregamento já foi finalizada.", "warn");
+                        }
+                    } else {
+                        showStatusMessage("Sessão de carregamento não encontrada.", "error");
                     }
                 });
-            } else {
-                 _populateAuditModal(entry);
             }
         }
         
@@ -2240,7 +2260,7 @@
             const storesCol = collection(db, getCollectionPath('lojas'));
             onSnapshot(storesCol, (snapshot) => {
                 storesCache = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))
-                                                .sort((a, b) => a.nomeFantasia.localeCompare(b.nomeFantasia));
+                                           .sort((a, b) => a.nomeFantasia.localeCompare(b.nomeFantasia));
                 
                 if(document.getElementById('tab-stores').classList.contains('hidden') === false) {
                     renderStoresPage();
@@ -3140,7 +3160,7 @@
             const reportsCol = collection(db, getCollectionPath('relatorios'));
             onSnapshot(reportsCol, (snapshot) => {
                 reportsCache = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))
-                                                 .sort((a,b) => (b.createdAt?.toDate() || 0) - (a.createdAt?.toDate() || 0));
+                                             .sort((a,b) => (b.createdAt?.toDate() || 0) - (a.createdAt?.toDate() || 0));
                 reportsCurrentPage = 1;
                 renderReportsPage();
             });
@@ -3751,4 +3771,3 @@
     </script>
 </body>
 </html>
-
