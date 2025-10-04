@@ -123,19 +123,12 @@
             from { opacity: 0; transform: translateX(-20px); }
             to { opacity: 1; transform: translateX(0); }
         }
-        @media print {
-            body * {
-                visibility: hidden;
-            }
-            #printable-area, #printable-area * {
-                visibility: visible;
-            }
-            #printable-area {
-                position: absolute;
-                left: 0;
-                top: 0;
-                width: 100%;
-            }
+        
+        /* Estilo para a área de impressão da etiqueta, fica fora da tela */
+        #printable-area {
+            position: absolute;
+            left: -9999px;
+            top: -9999px;
         }
     </style>
 </head>
@@ -226,6 +219,8 @@
                     <button id="tab-btn-pedidos-loja" class="tab-button w-full text-left block py-3 px-4 text-sm text-slate-300 hover:bg-slate-700/50">Pedidos da Loja</button>
                     <button id="tab-btn-gestao-pedidos" class="tab-button w-full text-left block py-3 px-4 text-sm text-slate-300 hover:bg-slate-700/50">Gestão de Pedidos</button>
                     <button id="tab-btn-expedicao" class="tab-button w-full text-left block py-3 px-4 text-sm text-slate-300 hover:bg-slate-700/50">Expedição</button>
+                    <!-- NOVO BOTÃO DE HISTÓRICO -->
+                    <button id="tab-btn-historico-paletes" class="tab-button w-full text-left block py-3 px-4 text-sm text-slate-300 hover:bg-slate-700/50">Histórico de Paletes</button>
                     <button id="tab-btn-control" class="tab-button w-full text-left block py-3 px-4 text-sm text-slate-300 hover:bg-slate-700/50">Controle de Doca</button>
                     <button id="tab-btn-stock" class="tab-button w-full text-left block py-3 px-4 text-sm text-slate-300 hover:bg-slate-700/50">Estoque de Itens</button>
                     <button id="tab-btn-providers" class="tab-button w-full text-left block py-3 px-4 text-sm text-slate-300 hover:bg-slate-700/50">Prestadores de Serviço</button>
@@ -285,6 +280,22 @@
                     <div id="in-separation-orders-list" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                          <p class="text-slate-500 col-span-full">Nenhum pedido em separação no momento.</p>
                     </div>
+                </div>
+            </div>
+
+            <!-- NOVA SEÇÃO: Histórico de Paletes -->
+            <div id="tab-historico-paletes" class="hidden fade-in">
+                <div class="card bg-slate-800/50 backdrop-blur-md border border-slate-700 p-6 rounded-xl">
+                    <div class="flex flex-col sm:flex-row flex-wrap justify-between items-start sm:items-center mb-4 gap-4">
+                        <h2 class="text-2xl font-semibold text-white w-full sm:w-auto">Histórico de Paletes</h2>
+                        <div class="flex flex-col sm:flex-row items-start sm:items-center gap-4 w-full sm:w-auto">
+                            <input type="text" id="pallet-history-search" placeholder="Buscar por ID, Loja, Montador..." class="p-2 bg-slate-900/50 border border-slate-700 rounded-md focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500 text-slate-200 w-full sm:w-auto">
+                        </div>
+                    </div>
+                    <div id="pallet-history-list" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mt-4">
+                        <p id="pallet-history-placeholder" class="text-slate-500 col-span-full">Nenhum palete no histórico.</p>
+                    </div>
+                    <div id="pallet-history-pagination-controls" class="mt-6 flex justify-center items-center space-x-2"></div>
                 </div>
             </div>
 
@@ -614,8 +625,8 @@
         </div>
     </main>
     
-    <!-- Div para a área de impressão -->
-    <div id="printable-area" class="hidden"></div>
+    <!-- Div para a área de impressão, posicionada fora da tela -->
+    <div id="printable-area"></div>
 
     <!-- Overlay de Carregamento -->
     <div id="loading-overlay" class="fixed inset-0 bg-black bg-opacity-70 backdrop-blur-sm flex items-center justify-center hidden z-50">
@@ -769,7 +780,7 @@
              apiKey: "AIzaSyC7J_J7JCagM65E5qkl1z-Kn2V360ldmdg",
              authDomain: "minhas-credenciais-firebase.firebaseapp.com",
              projectId: "minhas-credenciais-firebase",
-             storageBucket: "minhas-credenciais-firebase.firebasestorage.app",
+             storageBucket: "minhas-credenciais-firebase.appspot.com",
              messagingSenderId: "90146495031",
              appId: "1:90146495031:web:04bdab47de65f7444cbdb2"
         };
@@ -787,6 +798,7 @@
         let storesCache = [];
         let stockItemsCache = [];
         let ordersCache = [];
+        let palletsCache = []; // Cache para o novo histórico de paletes
         let vehicleHistoryCache = [];
         let providerHistoryCache = [];
         let reportsCache = [];
@@ -805,6 +817,8 @@
         const storesPerPage = 6;
         let stockCurrentPage = 1;
         const stockPerPage = 5;
+        let palletHistoryCurrentPage = 1; // Paginação para o novo histórico
+        const palletHistoryPerPage = 6;
         let vehicleHistoryCurrentPage = 1;
         const vehicleHistoryPerPage = 6;
         let providerHistoryCurrentPage = 1;
@@ -926,6 +940,7 @@
             listenForStores();
             listenForStockItems(); 
             listenForOrders();
+            listenForPallets(); // Novo listener para o histórico de paletes
             listenForEntries();
             listenForProviders();
             listenForReports();
@@ -933,7 +948,7 @@
         }
 
         window.showTab = (tabName) => {
-            ['control', 'stores', 'dashboard', 'providers', 'reports', 'expedicao', 'stock', 'pedidos-loja', 'gestao-pedidos'].forEach(id => {
+            ['control', 'stores', 'dashboard', 'providers', 'reports', 'expedicao', 'stock', 'pedidos-loja', 'gestao-pedidos', 'historico-paletes'].forEach(id => {
                 const tab = document.getElementById(`tab-${id}`);
                 const tabBtn = document.getElementById(`tab-btn-${id}`);
                 if (tab) tab.classList.add('hidden');
@@ -973,6 +988,10 @@
             if(tabName === 'pedidos-loja') {
                 populateStoreSelect();
             }
+            if(tabName === 'historico-paletes') {
+                palletHistoryCurrentPage = 1;
+                renderPalletHistoryPage();
+            }
         };
 
         function showStatusMessage(message, type = 'success', context = 'app') {
@@ -997,6 +1016,9 @@
             document.getElementById('order-item-search').addEventListener('input', handleOrderItemSearch);
             document.getElementById('assign-assembler-form').addEventListener('submit', handleAssignAssembler);
             document.getElementById('expedition-finalization-form').addEventListener('submit', handleFinalizeExpedition);
+
+            // Novo Histórico
+            document.getElementById('pallet-history-search').addEventListener('input', renderPalletHistoryPage);
 
             // Controle de Doca
             document.getElementById('entry-form').addEventListener('submit', handleAddEntry);
@@ -1252,7 +1274,7 @@
             const ordersCol = collection(db, getCollectionPath('pedidos'));
             onSnapshot(ordersCol, (snapshot) => {
                 ordersCache = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))
-                                    .sort((a,b) => (b.createdAt?.toDate() || 0) - (a.createdAt?.toDate() || 0));
+                                         .sort((a,b) => (b.createdAt?.toDate() || 0) - (a.createdAt?.toDate() || 0));
                 
                 renderPendingOrders();
                 renderInSeparationOrders();
@@ -1497,9 +1519,9 @@
                 });
                 await batch.commit();
 
-                showStatusMessage("Expedição finalizada com sucesso!");
+                showStatusMessage("Expedição finalizada com sucesso! Gerando etiqueta...");
                 closeExpeditionModal();
-                showPalletLabel(palletDocRef.id, newPallet);
+                generatePalletLabelPDF(palletDocRef.id, newPallet);
 
             } catch (error) {
                 console.error("Erro ao finalizar expedição:", error);
@@ -1509,34 +1531,63 @@
             }
         }
         
-        // Etapa 5: Impressão e Etiquetagem
-        function showPalletLabel(palletId, palletData) {
+        // Etapa 5: Impressão e Etiquetagem (FUNÇÃO CORRIGIDA)
+        async function generatePalletLabelPDF(palletId, palletData) {
+            loadingOverlay.classList.remove('hidden');
+            loadingText.textContent = 'Gerando etiqueta do palete...';
+
             const printableArea = document.getElementById('printable-area');
-            const expeditedDate = new Date(); // Usamos a data atual para a etiqueta
+            const expeditedDate = new Date(); 
 
             printableArea.innerHTML = `
-                <div id="pallet-label-printable" class="p-4 bg-white text-black rounded-lg text-center" style="width: 400px; margin: auto;">
-                    <div id="qr-code-container" class="p-2 bg-white rounded-lg inline-block"></div>
-                    <p class="text-sm font-mono mt-1">${palletId}</p>
+                <div id="pallet-label-content" class="p-4 bg-white text-black" style="width: 400px; font-family: sans-serif;">
+                    <div id="qr-code-container" class="mx-auto my-2 w-32 h-32"></div>
+                    <p class="text-center text-sm font-mono mt-1">${palletId}</p>
                     <div class="text-left text-xs space-y-1 mt-3 border-t border-black pt-2">
                         <p><strong>Loja Destino:</strong> ${palletData.lojaDestino.nomeFantasia}</p>
-                        <p><strong>Montado por:</strong> ${palletData.assemblerInfo.name} (${palletData.assemblerInfo.id})</p>
-                        <p><strong>Expedido por:</strong> ${palletData.expeditorInfo.name} (${palletData.expeditorInfo.id})</p>
+                        <p><strong>Montado por:</strong> ${palletData.assemblerInfo.name} (#${palletData.assemblerInfo.id})</p>
+                        <p><strong>Expedido por:</strong> ${palletData.expeditorInfo.name} (#${palletData.expeditorInfo.id})</p>
                         <p><strong>Data Pedido:</strong> ${formatDateTime(palletData.createdAt)}</p>
                         <p><strong>Data Expedição:</strong> ${formatDateTime(expeditedDate)}</p>
                         <p><strong>Peso Total:</strong> ${palletData.weight} Kg</p>
                     </div>
                 </div>
             `;
-
-            const container = printableArea.querySelector('#qr-code-container');
+            
+            // Gera o QR Code
+            const qrContainer = printableArea.querySelector('#qr-code-container');
             const qr = qrcode(4, 'L');
             qr.addData(palletId);
             qr.make();
-            container.innerHTML = qr.createImgTag(5, 4);
+            qrContainer.innerHTML = qr.createImgTag(4, 0);
 
-            if (window.confirm("Etiqueta gerada! Deseja imprimir agora?")) {
-                window.print();
+            // Aguarda um pequeno instante para garantir que a imagem do QR code foi renderizada no DOM
+            await new Promise(resolve => setTimeout(resolve, 200));
+
+            const labelElement = document.getElementById('pallet-label-content');
+
+            try {
+                const canvas = await html2canvas(labelElement, { scale: 3 });
+                const imgData = canvas.toDataURL('image/png');
+                
+                const { jsPDF } = window.jspdf;
+                // Dimensões de uma etiqueta comum (ex: 100x150mm)
+                const pdf = new jsPDF({
+                    orientation: 'portrait',
+                    unit: 'mm',
+                    format: [100, 150] 
+                });
+
+                pdf.addImage(imgData, 'PNG', 5, 5, 90, 140); // Adiciona com margens
+                pdf.save(`etiqueta_palete_${palletId.substring(0, 6)}.pdf`);
+                showStatusMessage("Etiqueta PDF gerada com sucesso!");
+
+            } catch (error) {
+                console.error("Erro ao gerar PDF da etiqueta: ", error);
+                showStatusMessage("Falha ao gerar o PDF da etiqueta.", "error");
+            } finally {
+                printableArea.innerHTML = '';
+                loadingOverlay.classList.add('hidden');
             }
         }
         
@@ -1548,8 +1599,8 @@
                 return;
             }
 
-            const entryDocRef = doc(db, getCollectionPath('sessoes_carregamento'), entryId);
-            const currentEntry = vehicleHistoryCache.concat(allEntriesCache.filter(e => e.status === 'ativo')).find(e => e.id === entryId);
+            const allActiveEntries = ordersCache.filter(e => e.status === 'ativo');
+            const currentEntry = vehicleHistoryCache.concat(allActiveEntries).find(e => e.id === entryId);
             
             const scanInput = document.getElementById('qr-scan-input');
             scanInput.disabled = true;
@@ -1569,13 +1620,21 @@
                 }
 
                 const palletData = {id: palletDoc.id, ...palletDoc.data()};
+                if (palletData.status === 'embarcado') {
+                    addScanLog(`Atenção: Palete ${palletId} já consta como embarcado em outra sessão.`, 'warn');
+                    return;
+                }
                 if (palletData.status !== 'pronto_carregamento') {
                     addScanLog(`Status inválido para o palete ${palletId} (${palletData.status}).`, 'error');
                     return;
                 }
                 
+                // Adiciona o palete à sessão de carregamento atual
+                const entryDocRef = doc(db, getCollectionPath('sessoes_carregamento'), entryId);
                 const updatedScannedPallets = [...(currentEntry.paletes_escaneados || []), palletData];
                 await updateDoc(entryDocRef, { paletes_escaneados: updatedScannedPallets });
+
+                // Atualiza o status do palete
                 await updateDoc(palletDocRef, { status: 'embarcado', cargaId: entryId, embarcadoEm: serverTimestamp() });
                 
                 addScanLog(`Palete ${palletId} validado e embarcado!`, 'success');
@@ -1733,7 +1792,7 @@
             const stockCol = collection(db, getCollectionPath('stock_items'));
             onSnapshot(stockCol, (snapshot) => {
                 stockItemsCache = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))
-                                       .sort((a, b) => a.productName.localeCompare(b.productName));
+                                              .sort((a, b) => a.productName.localeCompare(b.productName));
                 if(document.getElementById('tab-stock').classList.contains('hidden') === false) {
                     renderStockItemsPage();
                 }
@@ -1907,12 +1966,9 @@
         // --- LÓGICA DO MODAL DE AUDITORIA E SCANNER --- 
         
         window.openAuditModal = (entryId) => {
-            const allEntries = vehicleHistoryCache.concat(Array.from(document.querySelectorAll('#active-entries-list > div')).map(div => {
-                // Quick hack to get active entries if cache is slow
-                return ordersCache.find(e => div.innerHTML.includes(e.id));
-            }));
+            const allActiveEntries = ordersCache.filter(e => e.status === 'ativo');
+            const entry = vehicleHistoryCache.concat(allActiveEntries).find(e => e && e.id === entryId);
 
-            const entry = allEntries.find(e => e && e.id === entryId);
             if (!entry) {
                 const docRef = doc(db, getCollectionPath('sessoes_carregamento'), entryId);
                 getDoc(docRef).then(docSnap => {
@@ -2073,7 +2129,7 @@
                 palletDiv.className = 'p-3 bg-slate-800 rounded-lg border border-slate-700';
                 palletDiv.innerHTML = ` 
                     <p class="font-semibold text-slate-200">ID: <span class="font-mono text-cyan-400">${pallet.id}</span></p>
-                    <p class="text-sm text-slate-400">Montador: ${pallet.assemblerInfo.name} (${pallet.assemblerInfo.id || 'N/A'})</p>
+                    <p class="text-sm text-slate-400">Montador: ${pallet.assemblerInfo.name} (#${pallet.assemblerInfo.id || 'N/A'})</p>
                     <p class="text-xs text-slate-500">${pallet.weight || '0.00'} Kg</p>
                     <div class="mt-2 pt-2 border-t border-slate-700/50">
                        <ul class="text-sm text-slate-300 space-y-1 list-disc list-inside">${itemsDetails}</ul>
@@ -2087,7 +2143,7 @@
             const entryId = document.getElementById('audit-modal').dataset.entryId;
             if (!entryId) return;
 
-            if (window.confirm('Tem certeza que deseja finalizar esta sessão de carregamento?')) {
+            if (confirm('Tem certeza que deseja finalizar esta sessão de carregamento?')) {
                 const entryDocRef = doc(db, getCollectionPath('sessoes_carregamento'), entryId);
                 try {
                     await updateDoc(entryDocRef, {
@@ -2168,7 +2224,7 @@
             const storesCol = collection(db, getCollectionPath('lojas'));
             onSnapshot(storesCol, (snapshot) => {
                 storesCache = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))
-                                             .sort((a, b) => a.nomeFantasia.localeCompare(b.nomeFantasia));
+                                                .sort((a, b) => a.nomeFantasia.localeCompare(b.nomeFantasia));
                 
                 if(document.getElementById('tab-stores').classList.contains('hidden') === false) {
                     renderStoresPage();
@@ -2346,8 +2402,8 @@
                     return `
                     <li class="p-3 bg-slate-900/50 rounded-md border border-slate-700">
                         <p class="font-bold text-slate-300">ID: <span class="font-mono text-cyan-400">${p.id}</span></p>
-                        <p class="text-sm text-slate-400">Montador: ${p.assemblerInfo.name} (${p.assemblerInfo.id || 'N/A'})</p>
-                        <p class="text-sm text-slate-400">Expedidor: ${p.expeditorInfo.name} (${p.expeditorInfo.id || 'N/A'})</p>
+                        <p class="text-sm text-slate-400">Montador: ${p.assemblerInfo.name} (#${p.assemblerInfo.id || 'N/A'})</p>
+                        <p class="text-sm text-slate-400">Expedidor: ${p.expeditorInfo.name} (#${p.expeditorInfo.id || 'N/A'})</p>
                         <p class="text-xs text-slate-500 mt-1">${p.weight || '0.00'} Kg</p>
                         <div class="mt-2 pt-2 border-t border-slate-700/50">
                            <ul class="text-sm text-slate-300 space-y-1 list-disc list-inside">${itemsDetails}</ul>
@@ -2428,7 +2484,7 @@
                         const itemsText = (p.items || [])
                             .map(item => `${item.quantity}x ${item.productName} (${item.barcode})`)
                             .join('\n');
-                        return [p.id, `${p.assemblerInfo.name} (${p.assemblerInfo.id})`, `${p.expeditorInfo.name} (${p.expeditorInfo.id})`, p.weight, itemsText];
+                        return [p.id, `${p.assemblerInfo.name} (#${p.assemblerInfo.id})`, `${p.expeditorInfo.name} (#${p.expeditorInfo.id})`, p.weight, itemsText];
                     }),
                     theme: 'grid',
                     didDrawPage: (data) => {
@@ -2498,7 +2554,12 @@
             if (typeof timestamp.toDate === 'function') {
                 return timestamp.toDate().toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
             }
-            return new Date(timestamp).toLocaleString('pt-BR');
+            // Fallback para datas que não são do Firestore
+            try {
+                return new Date(timestamp).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+            } catch (e) {
+                return 'Data inválida';
+            }
         }
         
         window.toggleStoreList = (entryId, showExpanded) => {
@@ -3063,7 +3124,7 @@
             const reportsCol = collection(db, getCollectionPath('relatorios'));
             onSnapshot(reportsCol, (snapshot) => {
                 reportsCache = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))
-                                             .sort((a,b) => (b.createdAt?.toDate() || 0) - (a.createdAt?.toDate() || 0));
+                                                 .sort((a,b) => (b.createdAt?.toDate() || 0) - (a.createdAt?.toDate() || 0));
                 reportsCurrentPage = 1;
                 renderReportsPage();
             });
@@ -3592,8 +3653,85 @@
             doc.save(`${filename}.pdf`);
         }
         
+        // --- NOVA SEÇÃO: HISTÓRICO DE PALETES ---
+        function listenForPallets() {
+            if (!currentUserId) return;
+            const palletsCol = collection(db, getCollectionPath('paletes'));
+            onSnapshot(palletsCol, (snapshot) => {
+                palletsCache = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))
+                                         .sort((a,b) => (b.expeditedAt?.toDate() || 0) - (a.expeditedAt?.toDate() || 0));
+                
+                if (document.getElementById('tab-historico-paletes').classList.contains('hidden') === false) {
+                    renderPalletHistoryPage();
+                }
+            }, (error) => console.error("Erro ao escutar paletes:", error));
+        }
+
+        function renderPalletHistoryPage() {
+            const listEl = document.getElementById('pallet-history-list');
+            const placeholder = document.getElementById('pallet-history-placeholder');
+            const searchTerm = document.getElementById('pallet-history-search').value.toLowerCase();
+            listEl.innerHTML = '';
+
+            const filteredPallets = palletsCache.filter(p => {
+                return p.id.toLowerCase().includes(searchTerm) ||
+                       (p.lojaDestino.nomeFantasia && p.lojaDestino.nomeFantasia.toLowerCase().includes(searchTerm)) ||
+                       (p.assemblerInfo.name && p.assemblerInfo.name.toLowerCase().includes(searchTerm)) ||
+                       (p.expeditorInfo.name && p.expeditorInfo.name.toLowerCase().includes(searchTerm));
+            });
+
+            if (filteredPallets.length === 0) {
+                placeholder.textContent = searchTerm ? 'Nenhum palete encontrado para sua busca.' : 'Nenhum palete no histórico.';
+                listEl.innerHTML = `<p class="text-slate-500 col-span-full">${placeholder.textContent}</p>`;
+                renderPaginationControls('pallet-history', 0, palletHistoryCurrentPage, changePalletHistoryPage);
+                return;
+            }
+
+            const startIndex = (palletHistoryCurrentPage - 1) * palletHistoryPerPage;
+            const endIndex = startIndex + palletHistoryPerPage;
+            const palletsToShow = filteredPallets.slice(startIndex, endIndex);
+
+            palletsToShow.forEach(pallet => {
+                const card = document.createElement('div');
+                card.className = 'card bg-slate-800/50 border border-slate-700 rounded-lg p-4 flex flex-col justify-between space-y-3';
+                
+                const getStatusBadge = (status) => {
+                    if (status === 'embarcado') {
+                        return '<span class="px-2 py-1 text-xs font-semibold text-green-200 bg-green-500/20 rounded-full">EMBARCADO</span>';
+                    }
+                    if (status === 'pronto_carregamento') {
+                        return '<span class="px-2 py-1 text-xs font-semibold text-blue-200 bg-blue-500/20 rounded-full">PRONTO</span>';
+                    }
+                    return `<span class="px-2 py-1 text-xs font-semibold text-gray-200 bg-gray-500/20 rounded-full">${status.toUpperCase()}</span>`;
+                }
+
+                card.innerHTML = `
+                    <div>
+                        <div class="flex justify-between items-start mb-2">
+                             <p class="font-bold text-lg text-cyan-400">${pallet.lojaDestino.nomeFantasia}</p>
+                             ${getStatusBadge(pallet.status)}
+                        </div>
+                        <p class="text-sm text-slate-400">ID Palete: <span class="font-mono">${pallet.id}</span></p>
+                        <p class="text-sm text-slate-400">Peso: <span class="font-semibold">${pallet.weight} Kg</span></p>
+                    </div>
+                     <div class="text-xs text-slate-400 border-t border-slate-700 pt-2 space-y-1">
+                        <p><span class="font-semibold text-slate-300">Montado por:</span> ${pallet.assemblerInfo.name} (#${pallet.assemblerInfo.id})</p>
+                        <p><span class="font-semibold text-slate-300">Expedido por:</span> ${pallet.expeditorInfo.name} (#${pallet.expeditorInfo.id})</p>
+                        <p><span class="font-semibold text-slate-300">Data Exped.:</span> ${formatDateTime(pallet.expeditedAt)}</p>
+                        ${pallet.status === 'embarcado' ? `<p><span class="font-semibold text-slate-300">Data Embarque:</span> ${formatDateTime(pallet.embarcadoEm)}</p>` : ''}
+                    </div>
+                `;
+                listEl.appendChild(card);
+            });
+            
+            renderPaginationControls('pallet-history', Math.ceil(filteredPallets.length / palletHistoryPerPage), palletHistoryCurrentPage, changePalletHistoryPage);
+        }
+
+        window.changePalletHistoryPage = (page) => {
+            palletHistoryCurrentPage = page;
+            renderPalletHistoryPage();
+        }
+
     </script>
 </body>
 </html>
-
-
