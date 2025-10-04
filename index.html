@@ -799,6 +799,7 @@
         let stockItemsCache = [];
         let ordersCache = [];
         let palletsCache = []; // Cache para o novo histórico de paletes
+		let activeEntriesCache = []; // <-- NOVO: Cache dedicado para sessões ativas
         let vehicleHistoryCache = [];
         let providerHistoryCache = [];
         let reportsCache = [];
@@ -1608,7 +1609,7 @@
         }
         
         // Etapa 6: Controle de Doca (Atualizado)
-        async function processScannedPalletId(palletId) {
+       async function processScannedPalletId(palletId) {
             const entryId = document.getElementById('audit-modal').dataset.entryId;
             if (!entryId) {
                 addScanLog('ERRO: Nenhuma sessão de carregamento ativa.', 'error');
@@ -1958,43 +1959,72 @@
             });
         }
         
-        function renderActiveEntry(entry) {
-            const activeListEl = document.getElementById('active-entries-list');
-            const entryDiv = document.createElement('div');
-            entryDiv.className = 'p-4 bg-slate-700/50 border border-slate-600 rounded-lg card cursor-pointer';
-            entryDiv.setAttribute('onclick', `openAuditModal('${entry.id}')`);
+        function listenForEntries() {
+            if (!currentUserId) return;
+            const entriesCol = collection(db, getCollectionPath('sessoes_carregamento'));
+            onSnapshot(entriesCol, (snapshot) => {
+                const allEntries = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 
-            entryDiv.innerHTML = ` 
-                <div class="flex flex-wrap justify-between items-start gap-4">
-                    <div class="flex-grow">
-                        <p class="font-bold text-lg text-cyan-400">${entry.placa.toUpperCase() || 'N/A'} <span class="text-base text-slate-400 font-medium">(Doca: ${entry.doca || 'N/A'})</span></p>
-                        <p class="text-sm text-slate-300"><span class="font-semibold text-slate-400">Auditor:</span> ${entry.auditorNome}</p>
-                        <p class="text-sm text-slate-400 mt-2"><span class="font-semibold">Início:</span> ${formatDateTime(entry.dataEntrada)}</p>
-                    </div>
-                    <div class="text-right">
-                        <span class="px-2 py-1 text-xs font-semibold text-yellow-200 bg-yellow-500/20 rounded-full">EM CARREGAMENTO</span>
-                        <p class="text-sm text-slate-400 mt-2">${(entry.paletes_escaneados || []).length} palete(s) embarcado(s)</p>
-                    </div>
-                </div>`;
-            activeListEl.appendChild(entryDiv);
+                // CORREÇÃO: Popula o novo cache de sessões ativas
+                activeEntriesCache = allEntries.filter(e => e.status === 'ativo').sort((a,b) => (b.dataEntrada?.toDate() || 0) - (a.dataEntrada?.toDate() || 0));
+                
+                const activeListEl = document.getElementById('active-entries-list');
+                activeListEl.innerHTML = '';
+                if (activeEntriesCache.length === 0) {
+                     activeListEl.innerHTML = '<p class="text-slate-500">Nenhuma sessão de carregamento ativa no momento.</p>';
+                } else {
+                     activeEntriesCache.forEach(renderActiveEntry);
+                }
+
+                vehicleHistoryCache = allEntries.filter(e => e.status !== 'ativo').sort((a,b) => {
+                    if (!a.dataSaida || !b.dataSaida) return 0;
+                    return (b.dataSaida?.toDate() || 0) - (a.dataSaida?.toDate() || 0)
+                });
+                
+                if (!document.getElementById('tab-control').classList.contains('hidden')) {
+                    renderVehicleHistoryPage();
+                }
+                
+                const openAuditModal = document.getElementById('audit-modal');
+                if (!openAuditModal.classList.contains('hidden')) {
+                    const entryId = openAuditModal.dataset.entryId;
+                    const updatedEntry = allEntries.find(e => e.id === entryId);
+                    if(updatedEntry) {
+                        updateAuditModalUI(updatedEntry);
+                    } else {
+                        closeAuditModal();
+                        showStatusMessage("A sessão de carregamento foi finalizada.", "warn");
+                    }
+                }
+            }, (error) => {
+                console.error("Erro ao escutar sessões:", error);
+                showStatusMessage("Não foi possível carregar as sessões.", "error");
+            });
         }
         
         // --- LÓGICA DO MODAL DE AUDITORIA E SCANNER --- 
         
-        window.openAuditModal = (entryId) => {
-            const allActiveEntries = ordersCache.filter(e => e.status === 'ativo');
-            const entry = vehicleHistoryCache.concat(allActiveEntries).find(e => e && e.id === entryId);
-
-            if (!entry) {
+          window.openAuditModal = (entryId) => {
+            // CORREÇÃO: Busca a sessão diretamente do cache de sessões ativas.
+            const entry = activeEntriesCache.find(e => e.id === entryId);
+            
+            if (entry) {
+                _populateAuditModal(entry);
+            } else {
+                console.warn(`Sessão ${entryId} não encontrada no cache ativo, buscando no DB como fallback.`);
                 const docRef = doc(db, getCollectionPath('sessoes_carregamento'), entryId);
                 getDoc(docRef).then(docSnap => {
                     if (docSnap.exists()) {
                         const freshEntry = { id: docSnap.id, ...docSnap.data() };
-                        _populateAuditModal(freshEntry);
+                        if (freshEntry.status === 'ativo') {
+                            _populateAuditModal(freshEntry);
+                        } else {
+                            showStatusMessage("Esta sessão de carregamento já foi finalizada.", "warn");
+                        }
+                    } else {
+                        showStatusMessage("Sessão de carregamento não encontrada.", "error");
                     }
                 });
-            } else {
-                 _populateAuditModal(entry);
             }
         }
         
