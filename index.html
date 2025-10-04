@@ -1007,7 +1007,12 @@
             // Estoque
             document.getElementById('stock-item-form').addEventListener('submit', handleAddOrUpdateStockItem);
             document.getElementById('stock-item-search').addEventListener('input', renderStockItemsPage);
-            document.getElementById('stock-item-barcode').addEventListener('input', handleStockBarcodeCheck);
+            document.getElementById('stock-item-barcode').addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') {
+                    e.preventDefault(); // Impede o submit do formulário
+                    handleStockBarcodeCheck();
+                }
+            });
             document.getElementById('stock-check-barcode-btn').addEventListener('click', handleStockBarcodeCheck);
             document.getElementById('cancel-stock-edit-btn').addEventListener('click', cancelStockEdit);
             
@@ -1642,10 +1647,11 @@
             }
         }
 
-        function handleStockBarcodeCheck(e) {
-            const barcode = document.getElementById('stock-item-barcode').value.trim();
+        function handleStockBarcodeCheck() {
+            const barcodeInput = document.getElementById('stock-item-barcode');
+            const barcode = barcodeInput.value.trim();
             
-            // Se o formulário estiver em modo de edição manual, não aciona a busca automática.
+            // Se o formulário estiver em modo de edição manual (clicou em "Editar" na lista), não faz nada
             if (document.getElementById('stock-item-form').dataset.editMode === 'true') {
                 return;
             }
@@ -1653,15 +1659,18 @@
             if (!barcode) {
                 cancelStockEdit();
                 return;
-            };
+            }
 
             const existingItem = stockItemsCache.find(item => item.barcode === barcode);
+            
             if(existingItem) {
+                // Encontrou um item, muda para o modo "Adicionar ao Estoque"
                 document.getElementById('stock-form-title').textContent = 'Adicionar ao Estoque';
                 document.getElementById('stock-item-name').value = existingItem.productName;
                 document.getElementById('stock-item-name').readOnly = true;
                 document.getElementById('stock-item-weight').value = existingItem.weight;
                 document.getElementById('stock-item-weight').readOnly = true;
+                barcodeInput.readOnly = true; // Bloqueia o campo de código de barras
                 document.getElementById('stock-item-quantity').placeholder = 'Qtd. a adicionar';
                 document.getElementById('stock-item-quantity').value = '';
                 document.getElementById('stock-item-quantity').focus();
@@ -1670,7 +1679,20 @@
                 currentEditingStockItemId = existingItem.id;
                 document.getElementById('stock-item-form').dataset.editMode = 'false';
             } else {
-                 cancelStockEdit();
+                // Não encontrou, garante que está no modo "Novo Item", mantendo o código digitado
+                showStatusMessage(`Produto com código "${barcode}" não encontrado. Preencha os outros campos para criar um novo.`, 'warn');
+                document.getElementById('stock-form-title').textContent = 'Adicionar Novo Item';
+                document.getElementById('save-stock-item-btn').textContent = 'Salvar Item';
+                ['stock-item-name', 'stock-item-weight', 'stock-item-quantity'].forEach(id => {
+                    const el = document.getElementById(id);
+                    el.value = '';
+                    el.readOnly = false;
+                });
+                document.getElementById('stock-item-quantity').placeholder = 'Inicial';
+                document.getElementById('cancel-stock-edit-btn').classList.add('hidden');
+                currentEditingStockItemId = null;
+                delete document.getElementById('stock-item-form').dataset.editMode;
+                document.getElementById('stock-item-name').focus();
             }
         }
         
@@ -3573,4 +3595,5 @@
     </script>
 </body>
 </html>
+
 
