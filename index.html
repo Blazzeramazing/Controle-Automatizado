@@ -803,6 +803,7 @@
         let storesCache = [];
         let stockItemsCache = [];
         let ordersCache = [];
+        let allEntriesCache = []; // RE-ADICIONAR CACHE GLOBAL
         let vehicleHistoryCache = [];
         let providerHistoryCache = [];
         let reportsCache = [];
@@ -1074,21 +1075,24 @@
             const menuToggleBtn = document.getElementById('menu-toggle-btn');
             const mainMenu = document.getElementById('main-menu');
             
-            menuToggleBtn.addEventListener('click', (e) => {
-                e.stopPropagation();
-                mainMenu.classList.toggle('hidden');
-            });
+            // Adicionando verificação para garantir que os elementos existem
+            if (menuToggleBtn && mainMenu) {
+                menuToggleBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    mainMenu.classList.toggle('hidden');
+                });
 
-            mainMenu.addEventListener('click', (e) => {
-                const button = e.target.closest('.tab-button');
-                if (button) {
-                    const tabName = button.id.replace('tab-btn-', '');
-                    showTab(tabName);
-                }
-            });
+                mainMenu.addEventListener('click', (e) => {
+                    const button = e.target.closest('.tab-button');
+                    if (button) {
+                        const tabName = button.id.replace('tab-btn-', '');
+                        showTab(tabName);
+                    }
+                });
+            }
 
             document.addEventListener('click', (e) => {
-                if (!mainMenu.classList.contains('hidden') && !mainMenu.contains(e.target) && !menuToggleBtn.contains(e.target)) {
+                if (mainMenu && !mainMenu.classList.contains('hidden') && menuToggleBtn && !mainMenu.contains(e.target) && !menuToggleBtn.contains(e.target)) {
                     mainMenu.classList.add('hidden');
                 }
                 if (!e.target.closest('.search-container')) {
@@ -1873,13 +1877,13 @@
             onSnapshot(entriesCol, (snapshot) => {
                 const activeListEl = document.getElementById('active-entries-list');
                 activeListEl.innerHTML = '';
-                let allEntries = [];
+                allEntriesCache = []; // Limpa e repopula o cache global
 
                 snapshot.docs.forEach(doc => {
-                    allEntries.push({ id: doc.id, ...doc.data() });
+                    allEntriesCache.push({ id: doc.id, ...doc.data() });
                 });
                 
-                const activeEntries = allEntries.filter(e => e.status === 'ativo').sort((a,b) => (b.dataEntrada?.toDate() || 0) - (a.dataEntrada?.toDate() || 0));
+                const activeEntries = allEntriesCache.filter(e => e.status === 'ativo').sort((a,b) => (b.dataEntrada?.toDate() || 0) - (a.dataEntrada?.toDate() || 0));
                 
                 if (activeEntries.length === 0) {
                      activeListEl.innerHTML = '<p class="text-slate-500">Nenhuma sessão de carregamento ativa no momento.</p>';
@@ -1887,7 +1891,7 @@
                      activeEntries.forEach(renderActiveEntry);
                 }
 
-                vehicleHistoryCache = allEntries.filter(e => e.status !== 'ativo').sort((a,b) => {
+                vehicleHistoryCache = allEntriesCache.filter(e => e.status !== 'ativo').sort((a,b) => {
                     if (!a.dataSaida || !b.dataSaida) return 0;
                     return (b.dataSaida?.toDate() || 0) - (a.dataSaida?.toDate() || 0)
                 });
@@ -1897,7 +1901,7 @@
                 const openAuditModal = document.getElementById('audit-modal');
                 if (!openAuditModal.classList.contains('hidden')) {
                     const entryId = openAuditModal.dataset.entryId;
-                    const updatedEntry = allEntries.find(e => e.id === entryId);
+                    const updatedEntry = allEntriesCache.find(e => e.id === entryId);
                     if(updatedEntry) {
                         updateAuditModalUI(updatedEntry);
                     }
@@ -1932,26 +1936,6 @@
         
         // --- LÓGICA DO MODAL DE AUDITORIA E SCANNER --- 
         
-        window.openAuditModal = (entryId) => {
-            const allEntries = vehicleHistoryCache.concat(Array.from(document.querySelectorAll('#active-entries-list > div')).map(div => {
-                // Quick hack to get active entries if cache is slow
-                return ordersCache.find(e => div.innerHTML.includes(e.id));
-            }));
-
-            const entry = allEntries.find(e => e && e.id === entryId);
-            if (!entry) {
-                const docRef = doc(db, getCollectionPath('sessoes_carregamento'), entryId);
-                getDoc(docRef).then(docSnap => {
-                    if (docSnap.exists()) {
-                        const freshEntry = { id: docSnap.id, ...docSnap.data() };
-                        _populateAuditModal(freshEntry);
-                    }
-                });
-            } else {
-                 _populateAuditModal(entry);
-            }
-        }
-        
         function _populateAuditModal(entry) {
             const modal = document.getElementById('audit-modal');
             modal.dataset.entryId = entry.id;
@@ -1968,6 +1952,24 @@
             document.getElementById('qr-scan-input').value = '';
             document.getElementById('qr-reader-status').textContent = 'Clique em "Iniciar Câmera" para escanear.';
             updateAuditModalUI(entry);
+        }
+
+        window.openAuditModal = (entryId) => {
+            const entry = allEntriesCache.find(e => e.id === entryId);
+            if (!entry) {
+                console.warn(`Sessão ${entryId} não encontrada no cache. Buscando diretamente...`);
+                const docRef = doc(db, getCollectionPath('sessoes_carregamento'), entryId);
+                getDoc(docRef).then(docSnap => {
+                    if (docSnap.exists()) {
+                        const freshEntry = { id: docSnap.id, ...docSnap.data() };
+                        _populateAuditModal(freshEntry);
+                    } else {
+                        showStatusMessage(`Erro: Sessão com ID ${entryId} não encontrada.`, 'error');
+                    }
+                });
+            } else {
+                 _populateAuditModal(entry);
+            }
         }
 
         window.closeAuditModal = () => {
@@ -3458,6 +3460,7 @@
     </script>
 </body>
 </html>
+
 
 
 
