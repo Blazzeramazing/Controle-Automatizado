@@ -591,11 +591,26 @@
                                 <h3 class="text-xl font-semibold mb-2 text-white">Fluxo por Dia da Semana</h3>
                                 <p class="text-sm text-slate-400 mb-4">Identifique os dias mais movimentados da semana.</p>
                                 <div class="relative h-80"><canvas id="activityByWeekdayChart"></canvas></div>
-                     <div id="no-data-message" class="hidden text-center py-10">
-                         <p class="text-slate-500">Não há dados suficientes no período selecionado para gerar os gráficos.</p>
-                     </div>
-                 </div>
-             </div>
+                            </div>
+                        </div>
+                         <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                             <div class="bg-slate-900/50 p-6 rounded-xl border border-slate-700">
+                                 <h3 class="text-xl font-semibold mb-2 text-white">Top 5 Lojas (Carregamento)</h3>
+                                 <p class="text-sm text-slate-400 mb-4">Lojas que mais recebem entregas.</p>
+                                 <div class="relative h-80"><canvas id="topStoresChart"></canvas></div>
+                             </div>
+                             <div class="bg-slate-900/50 p-6 rounded-xl border border-slate-700">
+                                 <h3 class="text-xl font-semibold mb-2 text-white">Top 5 Empresas de Serviço</h3>
+                                 <p class="text-sm text-slate-400 mb-4">Empresas de serviço que mais acessam o local.</p>
+                                 <div class="relative h-80"><canvas id="topCompaniesChart"></canvas></div>
+                             </div>
+                         </div>
+                    </div>
+                    <div id="no-data-message" class="hidden text-center py-10">
+                        <p class="text-slate-500">Não há dados suficientes no período selecionado para gerar os gráficos.</p>
+                    </div>
+                </div>
+            </div>
 
             <!-- Seção Histórico de Paletes -->
             <div id="tab-pallet-history" class="hidden fade-in">
@@ -3443,6 +3458,7 @@
     </script>
 </body>
 </html>
+
 
 
 
