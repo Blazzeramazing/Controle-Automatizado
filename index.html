@@ -123,19 +123,6 @@
  			 from { opacity: 0; transform: translateX(-20px); }
  			 to { opacity: 1; transform: translateX(0); }
  		 }
- 		 @media print {
- 			 body * {
- 				 visibility: hidden;
- 			 }
- 			 #pallet-label-printable, #pallet-label-printable * {
- 				 visibility: visible;
- 			 }
- 			 #pallet-label-printable {
- 				 position: absolute;
- 				 left: 0;
- 				 top: 0;
- 			 }
- 		 }
  	 </style>
  </head>
  <body class="bg-slate-900 text-slate-300">
@@ -222,9 +209,7 @@
  					 <span id="current-tab-name" class="font-medium text-white">Controle de Doca</span>
  				 </button>
  				 <nav id="main-menu" class="hidden absolute left-0 mt-2 w-64 bg-slate-800 rounded-lg shadow-2xl z-20 border border-slate-700 overflow-hidden">
- 					 <button id="tab-btn-pedidos-loja" class="tab-button w-full text-left block py-3 px-4 text-sm text-slate-300 hover:bg-slate-700/50" onclick="showTab('pedidos-loja')">Pedidos da Loja</button>
- 					 <button id="tab-btn-gestao-pedidos" class="tab-button w-full text-left block py-3 px-4 text-sm text-slate-300 hover:bg-slate-700/50" onclick="showTab('gestao-pedidos')">Gestão de Pedidos</button>
- 					 <button id="tab-btn-pallet-generation" class="tab-button w-full text-left block py-3 px-4 text-sm text-slate-300 hover:bg-slate-700/50" onclick="showTab('pallet-generation')">Expedição</button>
+ 					 <button id="tab-btn-pallet-generation" class="tab-button w-full text-left block py-3 px-4 text-sm text-slate-300 hover:bg-slate-700/50" onclick="showTab('pallet-generation')">Geração de Paletes</button>
  					 <button id="tab-btn-control" class="tab-button active w-full text-left block py-3 px-4 text-sm text-slate-300 hover:bg-slate-700/50" onclick="showTab('control')">Controle de Doca</button>
  					 <button id="tab-btn-stock" class="tab-button w-full text-left block py-3 px-4 text-sm text-slate-300 hover:bg-slate-700/50" onclick="showTab('stock')">Estoque de Itens</button>
  					 <button id="tab-btn-providers" class="tab-button w-full text-left block py-3 px-4 text-sm text-slate-300 hover:bg-slate-700/50" onclick="showTab('providers')">Prestadores de Serviço</button>
@@ -236,19 +221,57 @@
  			 
  			 <div id="statusMessage" class="hidden p-4 mb-4 text-sm rounded-lg" role="alert"></div>
 
- 			 <!-- MÓDULO NOVO: Pedidos da Loja -->
- 			 <div id="tab-pedidos-loja" class="hidden fade-in">
- 				 <!-- UI para a loja fazer pedidos -->
- 			 </div>
-
- 			 <!-- MÓDULO NOVO: Gestão de Pedidos -->
- 			 <div id="tab-gestao-pedidos" class="hidden fade-in">
- 				 <!-- UI para líderes gerenciarem e distribuirem os pedidos -->
- 			 </div>
-
- 			 <!-- MÓDULO 1: Geração de Paletes (agora Expedição) -->
+ 			 <!-- MÓDULO 1: Geração de Paletes -->
  			 <div id="tab-pallet-generation" class="hidden fade-in">
- 				  <!-- UI de Expedição -->
+ 				  <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+ 					  <div class="lg:col-span-1 card bg-slate-800/50 backdrop-blur-md border border-slate-700 p-6 rounded-xl h-fit">
+ 						  <h2 class="text-2xl font-semibold mb-4 text-white">Montar Novo Palete</h2>
+ 						  <form id="pallet-generation-form" class="space-y-4">
+ 							  <div>
+ 								  <label for="pallet-operator-name" class="block text-sm font-medium text-slate-400 mb-1">Nome do Operador</label>
+ 								  <input type="text" id="pallet-operator-name" required class="w-full p-2 bg-slate-900/50 border border-slate-700 rounded-md focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500 text-slate-200">
+ 							  </div>
+ 							  
+ 							  <!-- Seção de Scan de Itens -->
+ 							  <div class="border-t border-slate-700 pt-4 space-y-4">
+ 								  <h3 class="text-lg font-medium text-white">Adicionar Itens ao Palete</h3>
+ 								  <div>
+ 									  <label for="pallet-item-barcode-input" class="block text-sm font-medium text-slate-400 mb-1">Escanear Código de Barras</label>
+ 									  <input type="text" id="pallet-item-barcode-input" placeholder="Use o leitor ou digite e tecle Enter" class="w-full p-2 bg-slate-900/50 border border-slate-700 rounded-md focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500 text-slate-200">
+ 								  </div>
+ 								  <div id="scanned-product-details" class="hidden p-4 bg-slate-900/50 rounded-lg space-y-3 border border-slate-700">
+ 									  <p class="text-sm">Produto encontrado:</p>
+ 									  <p id="scanned-product-name" class="font-bold text-lg text-cyan-400"></p>
+ 									  <div class="flex items-end gap-4">
+ 										  <div class="flex-grow">
+ 											  <label for="scanned-product-quantity" class="block text-sm font-medium text-slate-400 mb-1">Quantidade</label>
+ 											  <input type="number" id="scanned-product-quantity" min="1" value="1" class="w-full p-2 bg-slate-800 border border-slate-600 rounded-md focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500 text-slate-200">
+ 										  </div>
+ 										  <button type="button" id="add-scanned-product-btn" class="bg-green-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-green-500">Adicionar</button>
+ 									  </div>
+ 								  </div>
+ 							  </div>
+ 							  
+ 							  <div>
+ 								  <label for="pallet-weight" class="block text-sm font-medium text-slate-400 mb-1">Peso Total (Kg)</label>
+ 								  <input type="number" id="pallet-weight" class="w-full p-2 bg-slate-900/50 border border-slate-700 rounded-md focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500 text-slate-200">
+ 							  </div>
+ 							  <button type="submit" class="w-full bg-cyan-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-cyan-500 transform hover:scale-105 shadow-lg shadow-cyan-500/20">Finalizar e Gerar QR Code</button>
+ 						  </form>
+ 					  </div>
+ 					  <div class="lg:col-span-2 card bg-slate-800/50 backdrop-blur-md border border-slate-700 p-6 rounded-xl flex flex-col">
+ 						  <h2 class="text-2xl font-semibold mb-4 text-white">Itens no Palete Atual</h2>
+ 						  <div id="pallet-items-added-list" class="space-y-3 overflow-y-auto flex-grow pr-2">
+ 							  <p class="text-slate-500 text-center mt-8">Nenhum item adicionado ainda.</p>
+ 						  </div>
+ 					  </div>
+ 				  </div>
+ 				  <div class="card bg-slate-800/50 backdrop-blur-md border border-slate-700 p-6 rounded-xl mt-8">
+ 					  <h2 class="text-2xl font-semibold mb-4 text-white">Paletes Aguardando Carregamento</h2>
+ 					  <div id="generated-pallets-list" class="space-y-3">
+ 						  <p class="text-slate-500">Nenhum palete gerado no momento.</p>
+ 					  </div>
+ 				  </div>
  			 </div>
 
  			 <!-- MÓDULO 2: Seção Controle de Doca -->
@@ -257,7 +280,7 @@
  				 <div class="card bg-slate-800/50 backdrop-blur-md border border-slate-700 p-6 rounded-xl mb-8">
  					 <h2 class="text-2xl font-semibold mb-4 text-white">Registrar Nova Sessão de Carregamento</h2>
  					 <form id="entry-form" class="space-y-6">
- 						 <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+ 						 <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
  							 <div>
  								 <label for="auditor-nome" class="block text-sm font-medium text-slate-400 mb-1">Nome do Auditor (Prevenção)</label>
  								 <input type="text" id="auditor-nome" required class="w-full p-2 bg-slate-900/50 border border-slate-700 rounded-md focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500 text-slate-200">
@@ -320,11 +343,11 @@
  				 </div>
  			 </div>
  			 
- 			 <!-- MÓDULO: Estoque de Itens -->
+ 			 <!-- MÓDULO NOVO: Estoque de Itens -->
  			 <div id="tab-stock" class="hidden fade-in">
  				  <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
  					  <div class="lg:col-span-1 card bg-slate-800/50 backdrop-blur-md border border-slate-700 p-6 rounded-xl h-fit">
- 						  <h2 id="stock-form-title" class="text-2xl font-semibold mb-4 text-white">Adicionar Novo Item</h2>
+ 						  <h2 class="text-2xl font-semibold mb-4 text-white">Adicionar Novo Item ao Estoque</h2>
  						  <form id="stock-item-form" class="space-y-4">
  							  <div>
  								  <label for="stock-item-name" class="block text-sm font-medium text-slate-400 mb-1">Nome do Produto</label>
@@ -334,20 +357,11 @@
  								  <label for="stock-item-barcode" class="block text-sm font-medium text-slate-400 mb-1">Código de Barras (SKU)</label>
  								  <input type="text" id="stock-item-barcode" required class="w-full p-2 bg-slate-900/50 border border-slate-700 rounded-md focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500 text-slate-200">
  							  </div>
- 							  <div class="grid grid-cols-2 gap-4">
- 								  <div>
- 									  <label for="stock-item-quantity" class="block text-sm font-medium text-slate-400 mb-1">Quantidade</label>
- 									  <input type="number" id="stock-item-quantity" required class="w-full p-2 bg-slate-900/50 border border-slate-700 rounded-md focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500 text-slate-200" placeholder="Inicial">
- 								  </div>
- 								  <div>
- 									  <label for="stock-item-weight" class="block text-sm font-medium text-slate-400 mb-1">Peso (Kg)</label>
- 									  <input type="number" step="0.01" id="stock-item-weight" required class="w-full p-2 bg-slate-900/50 border border-slate-700 rounded-md focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500 text-slate-200" placeholder="0.00">
- 								  </div>
+ 							  <div>
+ 								  <label for="stock-item-quantity" class="block text-sm font-medium text-slate-400 mb-1">Quantidade Inicial</label>
+ 								  <input type="number" id="stock-item-quantity" required class="w-full p-2 bg-slate-900/50 border border-slate-700 rounded-md focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500 text-slate-200">
  							  </div>
- 							  <div class="flex flex-col gap-2">
- 								 <button id="save-stock-item-btn" type="submit" class="w-full bg-cyan-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-cyan-500 transform hover:scale-105 shadow-lg shadow-cyan-500/20">Salvar Item</button>
- 								 <button id="cancel-stock-edit-btn" type="button" class="hidden w-full bg-slate-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-slate-500">Cancelar Edição</button>
- 							  </div>
+ 							  <button type="submit" class="w-full bg-cyan-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-cyan-500 transform hover:scale-105 shadow-lg shadow-cyan-500/20">Salvar Item</button>
  						  </form>
  					  </div>
  					  <div class="lg:col-span-2 card bg-slate-800/50 backdrop-blur-md border border-slate-700 p-6 rounded-xl">
@@ -630,19 +644,15 @@
  		 </div>
  	 </div>
  	 
- 	 <!-- Modal para exibir Etiqueta do Palete para Impressão -->
+ 	 <!-- Modal para exibir QR Code Gerado -->
  	 <div id="qr-code-modal" class="fixed inset-0 bg-black bg-opacity-80 backdrop-blur-sm flex items-center justify-center hidden z-50 p-4">
  		 <div class="bg-slate-800 border border-slate-700 rounded-xl shadow-2xl p-6 text-center max-w-sm w-full fade-in">
- 			 <h2 class="text-2xl font-bold text-white mb-2">Etiqueta de Expedição Gerada!</h2>
+ 			 <h2 class="text-2xl font-bold text-white mb-2">Palete Gerado com Sucesso!</h2>
  			 <p class="text-slate-400 mb-4">Imprima a etiqueta abaixo e cole no palete.</p>
- 			 <!-- Área de impressão da etiqueta -->
- 			 <div id="pallet-label-printable" class="p-4 bg-white text-black rounded-lg">
- 				 <div id="qr-code-container" class="p-2 bg-white rounded-lg inline-block"></div>
- 				 <p class="text-sm font-mono mt-1" id="qr-code-id-label"></p>
- 				 <div id="pallet-label-details" class="text-left text-xs space-y-1 mt-3"></div>
- 			 </div>
+ 			 <div id="qr-code-container" class="p-4 bg-white rounded-lg inline-block"></div>
+ 			 <p class="text-sm font-mono text-slate-500 mt-2" id="qr-code-id-label"></p>
  			 <div class="mt-6 flex gap-4">
- 				 <button onclick="printPalletLabel()" class="w-full bg-cyan-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-cyan-500">Imprimir</button>
+ 				 <button onclick="printQrCode()" class="w-full bg-cyan-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-cyan-500">Imprimir</button>
  				 <button onclick="closeQrCodeModal()" class="w-full bg-slate-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-slate-500">Fechar</button>
  			 </div>
  		 </div>
@@ -708,7 +718,7 @@
  		 let currentUserId = null;
  		 let appInitialized = false;
  		 let storesCache = [];
- 		 let stockItemsCache = [];
+ 		 let stockItemsCache = []; // NOVO: Cache para itens de estoque
  		 let allEntriesCache = [];
  		 let generatedPalletsCache = [];
  		 let vehicleHistoryCache = [];
@@ -721,14 +731,13 @@
  		 let currentEntryStores = [];
  		 let currentProviderStores = [];
  		 let currentReportImages = [];
- 		 let currentPalletItems = [];
- 		 let currentEditingStockItemId = null; // Para controlar edição de item no estoque
+ 		 let currentPalletItems = []; // NOVO: Itens do palete sendo montado
 
  		 // Controles de Paginação
  		 let storesCurrentPage = 1;
  		 const storesPerPage = 6;
- 		 let stockCurrentPage = 1;
- 		 const stockPerPage = 5;
+ 		 let stockCurrentPage = 1; // NOVO: Paginação para estoque
+ 		 const stockPerPage = 5;    // NOVO
  		 let vehicleHistoryCurrentPage = 1;
  		 const vehicleHistoryPerPage = 6;
  		 let providerHistoryCurrentPage = 1;
@@ -847,16 +856,16 @@
  			 setupMasks();
  			 setupEventListeners();
  			 listenForStores();
- 			 listenForStockItems(); 
+ 			 listenForStockItems(); // NOVO
  			 listenForGeneratedPallets();
  			 listenForEntries();
  			 listenForProviders();
  			 listenForReports();
- 			 showTab('control'); 
+ 			 showTab('control'); // Manter o padrão de iniciar no controle de doca
  		 }
 
  		 window.showTab = (tabName) => {
- 			 ['control', 'stores', 'dashboard', 'providers', 'reports', 'pallet-generation', 'stock', 'pedidos-loja', 'gestao-pedidos'].forEach(id => {
+ 			 ['control', 'stores', 'dashboard', 'providers', 'reports', 'pallet-generation', 'stock'].forEach(id => {
  				 const tab = document.getElementById(`tab-${id}`);
  				 const tabBtn = document.getElementById(`tab-btn-${id}`);
  				 if (tab) tab.classList.add('hidden');
@@ -915,7 +924,6 @@
  			 // Módulo 1 (Geração de Paletes)
  			 document.getElementById('pallet-generation-form').addEventListener('submit', handleAddPallet);
  			 document.getElementById('pallet-item-barcode-input').addEventListener('keypress', handlePalletItemScan);
- 			 document.getElementById('find-pallet-item-btn').addEventListener('click', handlePalletItemScan); // Botão de busca
  			 document.getElementById('add-scanned-product-btn').addEventListener('click', handleAddScannedProductToPallet);
 
  			 // Módulo 2 (Controle de Doca)
@@ -925,10 +933,8 @@
  			 document.getElementById('start-scan-btn').addEventListener('click', toggleCameraScan);
 
  			 // Novo Módulo de Estoque
- 			 document.getElementById('stock-item-form').addEventListener('submit', handleAddOrUpdateStockItem);
+ 			 document.getElementById('stock-item-form').addEventListener('submit', handleAddStockItem);
  			 document.getElementById('stock-item-search').addEventListener('input', renderStockItemsPage);
- 			 document.getElementById('stock-item-barcode').addEventListener('input', handleStockBarcodeCheck);
- 			 document.getElementById('cancel-stock-edit-btn').addEventListener('click', cancelStockEdit);
  			 
  			 // Outros Módulos
  			 document.getElementById('store-form').addEventListener('submit', handleAddStore);
@@ -949,7 +955,7 @@
  			 document.getElementById('finalize-audit-btn').addEventListener('click', handleFinalizeAudit);
 
  			 // Helpers
- 			 ['auditor-matricula', 'provider-member-doc', 'doca-number', 'pallet-operator-id'].forEach(id => {
+ 			 ['auditor-matricula', 'provider-member-doc', 'doca-number'].forEach(id => {
  				 document.getElementById(id).addEventListener('input', restrictToNumbers);
  			 });
  			 const entryStoreSearch = document.getElementById('store-search-input');
@@ -970,9 +976,12 @@
  			 });
 
  			 document.addEventListener('click', (e) => {
+ 				 // Lógica para fechar o menu se clicar fora
  				 if (!mainMenu.classList.contains('hidden') && !mainMenu.contains(e.target) && !menuToggleBtn.contains(e.target)) {
  					 mainMenu.classList.add('hidden');
  				 }
+
+ 				 // Lógica para fechar busca de lojas
  				 if (!e.target.closest('.search-container')) {
  					 document.getElementById('store-search-results').classList.add('hidden');
  					 document.getElementById('provider-store-search-results').classList.add('hidden');
@@ -1002,13 +1011,10 @@
  			 }
 
  			 const form = e.target;
- 			 const totalWeight = currentPalletItems.reduce((acc, item) => acc + (item.weight * item.quantity), 0);
- 			 
  			 const newPallet = {
  				 operatorName: form['pallet-operator-name'].value,
- 				 operatorId: form['pallet-operator-id'].value, // Novo campo
- 				 items: currentPalletItems,
- 				 weight: totalWeight.toFixed(2), // Peso calculado
+ 				 items: currentPalletItems, // Usa a nova lista estruturada
+ 				 weight: form['pallet-weight'].value,
  				 createdAt: new Date(),
  				 status: 'gerado'
  			 };
@@ -1019,7 +1025,6 @@
  				 form.reset();
  				 currentPalletItems = [];
  				 renderAddedPalletItems();
- 				 updatePalletTotalWeight();
  				 showQrCodeModal(docRef.id);
  			 } catch (error) {
  				 console.error("Erro ao gerar palete: ", error);
@@ -1028,25 +1033,19 @@
  		 }
  		 
  		 function handlePalletItemScan(e) {
- 			 if (e.type === 'keypress' && e.key !== 'Enter') return;
+ 			 if (e.key !== 'Enter') return;
  			 e.preventDefault();
- 			 const barcodeInput = document.getElementById('pallet-item-barcode-input');
- 			 const barcode = barcodeInput.value.trim();
+ 			 const barcode = e.target.value.trim();
  			 if (!barcode) return;
  			 
  			 findProductByBarcode(barcode);
- 			 barcodeInput.value = '';
+ 			 e.target.value = '';
  		 }
 
  		 function findProductByBarcode(barcode) {
  			 const product = stockItemsCache.find(item => item.barcode === barcode);
  			 const detailsDiv = document.getElementById('scanned-product-details');
  			 if (product) {
- 				 if (!product.weight || product.weight <= 0) {
- 					 showStatusMessage(`O produto "${product.productName}" não tem um peso cadastrado. Adicione o peso no módulo de estoque.`, "error");
- 					 detailsDiv.classList.add('hidden');
- 					 return;
- 				 }
  				 document.getElementById('scanned-product-name').textContent = product.productName;
  				 detailsDiv.dataset.product = JSON.stringify(product);
  				 detailsDiv.classList.remove('hidden');
@@ -1076,13 +1075,11 @@
  					 id: product.id,
  					 productName: product.productName,
  					 barcode: product.barcode,
- 					 quantity: quantity,
- 					 weight: product.weight || 0
+ 					 quantity: quantity
  				 });
  			 }
  			 
  			 renderAddedPalletItems();
- 			 updatePalletTotalWeight();
 
  			 // Resetar campos
  			 detailsDiv.classList.add('hidden');
@@ -1108,7 +1105,7 @@
  						 <p class="text-sm text-slate-400">Código: ${item.barcode}</p>
  						 <p class="text-cyan-400 font-bold">Quantidade: ${item.quantity}</p>
  					 </div>
- 					 <button type="button" class="text-red-500 hover:text-red-400 text-2xl font-bold" onclick="removePalletItem(${index})">&times;</button>
+ 					 <button type="button" class="text-red-500 hover:text-red-400 font-bold" onclick="removePalletItem(${index})">&times;</button>
  				 `;
  				 listEl.appendChild(itemDiv);
  			 });
@@ -1117,12 +1114,6 @@
  		 window.removePalletItem = (index) => {
  			 currentPalletItems.splice(index, 1);
  			 renderAddedPalletItems();
- 			 updatePalletTotalWeight();
- 		 }
- 		 
- 		 function updatePalletTotalWeight() {
- 			 const totalWeight = currentPalletItems.reduce((acc, item) => acc + (item.weight * item.quantity), 0);
- 			 document.getElementById('pallet-total-weight-display').textContent = `${totalWeight.toFixed(2)} Kg`;
  		 }
 
  		 function listenForGeneratedPallets() {
@@ -1152,19 +1143,16 @@
  				 palletDiv.innerHTML = ` 
  					 <div>
  						 <p class="font-semibold text-slate-200">ID: <span class="font-mono text-cyan-400">${pallet.id}</span></p>
- 						 <p class="text-sm text-slate-400">Operador: ${pallet.operatorName} (${pallet.operatorId || 'N/A'})</p>
- 						 <p class="text-sm text-slate-500">${totalItems} unidade(s) - ${pallet.weight || '0.00'} Kg</p>
+ 						 <p class="text-sm text-slate-400">Operador: ${pallet.operatorName}</p>
+ 						 <p class="text-sm text-slate-500">${totalItems} unidade(s) - ${pallet.weight || 'N/A'} Kg</p>
  					 </div>
- 					 <button class="bg-slate-700 text-slate-300 font-bold py-2 px-3 rounded-lg hover:bg-slate-600 text-sm" onclick="showQrCodeModal('${pallet.id}')">Ver Etiqueta</button>
+ 					 <button class="bg-slate-700 text-slate-300 font-bold py-2 px-3 rounded-lg hover:bg-slate-600 text-sm" onclick="showQrCodeModal('${pallet.id}')">Ver QR</button>
  				 `;
  				 listEl.appendChild(palletDiv);
  			 });
  		 }
 
  		 window.showQrCodeModal = (palletId) => {
- 			 const pallet = generatedPalletsCache.find(p => p.id === palletId);
- 			 if(!pallet) return;
-
  			 const modal = document.getElementById('qr-code-modal');
  			 const container = document.getElementById('qr-code-container');
  			 container.innerHTML = ''; 
@@ -1174,17 +1162,9 @@
  			 const qr = qrcode(typeNumber, errorCorrectionLevel);
  			 qr.addData(palletId);
  			 qr.make();
- 			 container.innerHTML = qr.createImgTag(5, 4);
+ 			 container.innerHTML = qr.createImgTag(6, 8);
 
  			 document.getElementById('qr-code-id-label').textContent = palletId;
- 			 // Preencher detalhes da etiqueta
- 			 const detailsEl = document.getElementById('pallet-label-details');
- 			 detailsEl.innerHTML = `
- 				 <p><strong>Montado por:</strong> ${pallet.operatorName || 'N/A'} (${pallet.operatorId || 'N/A'})</p>
- 				 <p><strong>Data Montagem:</strong> ${formatDateTime(pallet.createdAt)}</p>
- 				 <p><strong>Loja Destino:</strong> ${pallet.lojaDestino || 'N/A'}</p> 
- 			 `; // Adicionar mais campos quando o fluxo estiver completo
-
  			 modal.classList.remove('hidden');
  		 }
 
@@ -1192,8 +1172,21 @@
  			 document.getElementById('qr-code-modal').classList.add('hidden');
  		 }
  		 
- 		 window.printPalletLabel = () => {
- 			 window.print();
+ 		 window.printQrCode = () => {
+ 			 const qrContainer = document.getElementById('qr-code-container');
+ 			 const palletId = document.getElementById('qr-code-id-label').textContent;
+ 			 const printWindow = window.open('', 'PRINT', 'height=600,width=800');
+ 			 printWindow.document.write('<html><head><title>Imprimir QR Code</title>');
+ 			 printWindow.document.write('<style>body { font-family: sans-serif; text-align: center; } img { max-width: 80%; } </style>');
+ 			 printWindow.document.write('</head><body >');
+ 			 printWindow.document.write(`<h1>Etiqueta de Palete</h1>`);
+ 			 printWindow.document.write(qrContainer.innerHTML);
+ 			 printWindow.document.write(`<p style="font-family: monospace; font-size: 12px;">${palletId}</p>`);
+ 			 printWindow.document.write('</body></html>');
+ 			 printWindow.document.close();
+ 			 printWindow.focus();
+ 			 printWindow.print();
+ 			 printWindow.close();
  		 }
  		 
  		 // --- MÓDULO 2: CONTROLE DE DOCA --- 
@@ -1362,6 +1355,7 @@
  			 const startBtn = document.getElementById('start-scan-btn');
  			 statusEl.textContent = 'Solicitando acesso à câmera...';
  			 
+ 			 // CORREÇÃO: Remove o foco do input manual antes de iniciar a câmera
  			 document.getElementById('qr-scan-input').blur();
 
  			 html5QrCode.start(
@@ -1458,6 +1452,7 @@
  				 addScanLog(`Erro de sistema ao validar ${palletId}.`, 'error');
  			 } finally {
  				 scanInput.disabled = false;
+ 				 // Não focar automaticamente se a câmera estiver ligada
  				 if (!html5QrCode || !html5QrCode.isScanning) {
  					 scanInput.focus();
  				 }
@@ -1498,8 +1493,8 @@
  				 palletDiv.className = 'p-3 bg-slate-800 rounded-lg border border-slate-700';
  				 palletDiv.innerHTML = ` 
  					 <p class="font-semibold text-slate-200">ID: <span class="font-mono text-cyan-400">${pallet.id}</span></p>
- 					 <p class="text-sm text-slate-400">Operador: ${pallet.operatorName} (${pallet.operatorId || 'N/A'})</p>
- 					 <p class="text-xs text-slate-500">${pallet.weight || '0.00'} Kg</p>
+ 					 <p class="text-sm text-slate-400">Operador: ${pallet.operatorName}</p>
+ 					 <p class="text-xs text-slate-500">${pallet.weight || 'N/A'} Kg</p>
  					 <div class="mt-2 pt-2 border-t border-slate-700/50">
  						<ul class="text-sm text-slate-300 space-y-1 list-disc list-inside">${itemsDetails}</ul>
  					 </div>
@@ -1512,6 +1507,8 @@
  			 const entryId = document.getElementById('audit-modal').dataset.entryId;
  			 if (!entryId) return;
 
+ 			 // Substituindo o confirm() por uma lógica de modal customizada no futuro, se necessário.
+ 			 // Por enquanto, mantemos para simplicidade, cientes da sua limitação em iframes.
  			 if (window.confirm('Tem certeza que deseja finalizar esta sessão de carregamento?')) {
  				 const entryDocRef = doc(db, getCollectionPath('sessoes_carregamento'), entryId);
  				 try {
@@ -1528,112 +1525,25 @@
  			 }
  		 }
 
- 		 // --- FUNÇÕES DE ESTOQUE (ATUALIZADAS) ---
- 		 async function handleAddOrUpdateStockItem(e) {
+ 		 // --- FUNÇÕES DE ESTOQUE (NOVAS) ---
+ 		 async function handleAddStockItem(e) {
  			 e.preventDefault();
  			 if (!currentUserId) return;
  			 const form = e.target;
- 			 const itemName = form['stock-item-name'].value;
- 			 const itemBarcode = form['stock-item-barcode'].value;
- 			 const itemQuantity = parseInt(form['stock-item-quantity'].value, 10);
- 			 const itemWeight = parseFloat(form['stock-item-weight'].value) || 0;
-
- 			 if (isNaN(itemQuantity)) {
- 				 showStatusMessage("Quantidade inválida.", "error");
- 				 return;
- 			 }
-
+ 			 const newStockItem = {
+ 				 productName: form['stock-item-name'].value,
+ 				 barcode: form['stock-item-barcode'].value,
+ 				 quantity: parseInt(form['stock-item-quantity'].value, 10),
+ 				 createdAt: new Date()
+ 			 };
  			 try {
- 				 if (currentEditingStockItemId) {
- 					 // Modo de Atualização (ou Adição de Quantidade)
- 					 const itemDocRef = doc(db, getCollectionPath('stock_items'), currentEditingStockItemId);
- 					 const docSnap = await getDoc(itemDocRef);
- 					 if(docSnap.exists()){
- 						 const existingData = docSnap.data();
- 						 const updatedData = {
- 							 productName: itemName,
- 							 barcode: itemBarcode,
- 							 weight: itemWeight,
- 							 quantity: existingData.quantity + itemQuantity
- 						 };
- 						 // Se o formulário foi populado por um item existente, o botão confirma a *soma* da quantidade.
- 						 // Se o usuário chegou aqui via botão "Editar", sobrescrevemos a quantidade.
- 						 if(form.dataset.editMode === 'true') {
- 							 updatedData.quantity = itemQuantity;
- 						 }
- 						 
- 						 await updateDoc(itemDocRef, updatedData);
- 						 showStatusMessage("Estoque atualizado com sucesso!");
- 					 }
- 				 } else {
- 					 // Modo de Criação
- 					 await addDoc(collection(db, getCollectionPath('stock_items')), {
- 						 productName: itemName,
- 						 barcode: itemBarcode,
- 						 quantity: itemQuantity,
- 						 weight: itemWeight,
- 						 createdAt: new Date()
- 					 });
- 					 showStatusMessage("Item adicionado ao estoque com sucesso!");
- 				 }
- 				 cancelStockEdit(); // Limpa e reseta o formulário
+ 				 await addDoc(collection(db, getCollectionPath('stock_items')), newStockItem);
+ 				 showStatusMessage("Item adicionado ao estoque com sucesso!");
+ 				 form.reset();
  			 } catch (error) {
- 				 console.error("Erro ao salvar no estoque: ", error);
+ 				 console.error("Erro ao adicionar item ao estoque: ", error);
  				 showStatusMessage("Erro ao salvar o item.", "error");
  			 }
- 		 }
-
- 		 function handleStockBarcodeCheck(e) {
- 			 const barcode = e.target.value.trim();
- 			 if (!barcode) {
- 				 if(currentEditingStockItemId) return; // Não limpa se estiver em modo de edição manual
- 				 cancelStockEdit();
- 				 return;
- 			 };
-
- 			 const existingItem = stockItemsCache.find(item => item.barcode === barcode);
- 			 if(existingItem) {
- 				 document.getElementById('stock-form-title').textContent = 'Adicionar ao Estoque Existente';
- 				 document.getElementById('stock-item-name').value = existingItem.productName;
- 				 document.getElementById('stock-item-weight').value = existingItem.weight;
- 				 document.getElementById('stock-item-quantity').placeholder = 'Adicionar Qtd.';
- 				 document.getElementById('stock-item-quantity').value = '';
- 				 document.getElementById('save-stock-item-btn').textContent = 'Adicionar Quantidade';
- 				 document.getElementById('cancel-stock-edit-btn').classList.remove('hidden');
- 				 currentEditingStockItemId = existingItem.id;
- 				 document.getElementById('stock-item-form').dataset.editMode = 'false';
- 			 } else {
- 				 if(currentEditingStockItemId) return; // Não limpa se estiver em modo de edição manual
- 				 cancelStockEdit();
- 			 }
- 		 }
- 		 
- 		 window.editStockItem = (itemId) => {
- 			 const item = stockItemsCache.find(i => i.id === itemId);
- 			 if(item) {
- 				 document.getElementById('stock-form-title').textContent = 'Editar Item';
- 				 document.getElementById('stock-item-name').value = item.productName;
- 				 document.getElementById('stock-item-barcode').value = item.barcode;
- 				 document.getElementById('stock-item-quantity').value = item.quantity;
- 				 document.getElementById('stock-item-weight').value = item.weight;
- 				 document.getElementById('stock-item-quantity').placeholder = 'Quantidade Total';
- 				 document.getElementById('save-stock-item-btn').textContent = 'Atualizar Item';
- 				 document.getElementById('cancel-stock-edit-btn').classList.remove('hidden');
- 				 currentEditingStockItemId = item.id;
- 				 document.getElementById('stock-item-form').dataset.editMode = 'true';
- 				 document.getElementById('stock-item-form').scrollIntoView({ behavior: 'smooth' });
- 			 }
- 		 }
-
- 		 function cancelStockEdit() {
- 			 const form = document.getElementById('stock-item-form');
- 			 form.reset();
- 			 document.getElementById('stock-form-title').textContent = 'Adicionar Novo Item';
- 			 document.getElementById('save-stock-item-btn').textContent = 'Salvar Item';
- 			 document.getElementById('stock-item-quantity').placeholder = 'Inicial';
- 			 document.getElementById('cancel-stock-edit-btn').classList.add('hidden');
- 			 currentEditingStockItemId = null;
- 			 delete form.dataset.editMode;
  		 }
 
  		 function listenForStockItems() {
@@ -1642,9 +1552,8 @@
  			 onSnapshot(stockCol, (snapshot) => {
  				 stockItemsCache = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))
  									   .sort((a, b) => a.productName.localeCompare(b.productName));
- 				 if(document.getElementById('tab-stock').classList.contains('hidden') === false) {
- 					 renderStockItemsPage();
- 				 }
+ 				 stockCurrentPage = 1; 
+ 				 renderStockItemsPage();
  			 }, (error) => {
  				 console.error("Erro ao carregar estoque:", error);
  				 showStatusMessage("Não foi possível carregar os itens do estoque.", "error");
@@ -1679,13 +1588,9 @@
  						 <div>
  							 <p class="font-semibold text-slate-200">${item.productName}</p>
  							 <p class="text-sm text-slate-400">Código: <span class="font-mono">${item.barcode}</span></p>
- 							 <p class="text-sm text-slate-400">Peso: <span class="font-mono">${item.weight || 0} Kg</span></p>
  							 <p class="text-lg font-bold text-cyan-400">Estoque: ${item.quantity}</p>
  						 </div>
- 						 <div class="flex gap-2">
- 							 <button class="text-cyan-400 hover:text-cyan-300 font-medium text-sm" onclick="editStockItem('${item.id}')">Editar</button>
- 							 <button class="text-red-500 hover:text-red-400 font-medium text-sm" onclick="deleteStockItem('${item.id}')">Excluir</button>
- 						 </div>
+ 						 <button class="text-red-500 hover:text-red-400 font-medium text-sm" onclick="deleteStockItem('${item.id}')">Excluir</button>
  					 </div>
  					`;
  				 listEl.appendChild(itemDiv);
@@ -1779,9 +1684,8 @@
  				 storesCache = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))
  											  .sort((a, b) => a.nomeFantasia.localeCompare(b.nomeFantasia));
  				 
- 				 if(document.getElementById('tab-stores').classList.contains('hidden') === false) {
- 					 renderStoresPage();
- 				 }
+ 				 storesCurrentPage = 1; 
+ 				 renderStoresPage();
  			 }, (error) => {
  				 console.error("Erro ao escutar lojas:", error);
  				 showStatusMessage("Não foi possível carregar as lojas.", "error");
@@ -1956,8 +1860,8 @@
  					 return `
  					 <li class="p-3 bg-slate-900/50 rounded-md border border-slate-700">
  						 <p class="font-bold text-slate-300">ID: <span class="font-mono text-cyan-400">${p.id}</span></p>
- 						 <p class="text-sm text-slate-400">Operador: ${p.operatorName} (${p.operatorId || 'N/A'})</p>
- 						 <p class="text-xs text-slate-500 mt-1">${p.weight || '0.00'} Kg</p>
+ 						 <p class="text-sm text-slate-400">Operador: ${p.operatorName}</p>
+ 						 <p class="text-xs text-slate-500 mt-1">${p.weight || 'N/A'} Kg</p>
  						 <div class="mt-2 pt-2 border-t border-slate-700/50">
  							<ul class="text-sm text-slate-300 space-y-1 list-disc list-inside">${itemsDetails}</ul>
  						 </div>
@@ -2037,7 +1941,7 @@
  						 const itemsText = (p.items || [])
  							 .map(item => `${item.quantity}x ${item.productName} (${item.barcode})`)
  							 .join('\n');
- 						 return [p.id, `${p.operatorName} (${p.operatorId || 'N/A'})`, p.weight, itemsText];
+ 						 return [p.id, p.operatorName, p.weight, itemsText];
  					 }),
  					 theme: 'grid',
  					 didDrawPage: (data) => {
@@ -2317,9 +2221,8 @@
  					 if(!a.exitTime || !b.exitTime) return 0;
  					 return b.exitTime.toDate() - a.exitTime.toDate()
  				 });
- 				 if(document.getElementById('tab-providers').classList.contains('hidden') === false) {
- 					 renderProviderHistoryPage();
- 				 }
+ 				 providerHistoryCurrentPage = 1;
+ 				 renderProviderHistoryPage();
  			 });
  		 }
 
@@ -3199,4 +3102,3 @@
  	 </script>
  </body>
  </html>
-
