@@ -365,7 +365,10 @@
                          <form id="stock-item-form" class="space-y-4">
                              <div>
                                  <label for="stock-item-barcode" class="block text-sm font-medium text-slate-400 mb-1">Código de Barras (SKU)</label>
-                                 <input type="text" id="stock-item-barcode" required class="w-full p-2 bg-slate-900/50 border border-slate-700 rounded-md focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500 text-slate-200">
+                                 <div class="flex gap-2">
+                                     <input type="text" id="stock-item-barcode" required class="w-full p-2 bg-slate-900/50 border border-slate-700 rounded-md focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500 text-slate-200">
+                                     <button type="button" id="stock-check-barcode-btn" class="bg-cyan-600 text-white font-bold px-4 rounded-lg hover:bg-cyan-500">Buscar</button>
+                                 </div>
                              </div>
                              <div>
                                  <label for="stock-item-name" class="block text-sm font-medium text-slate-400 mb-1">Nome do Produto</label>
@@ -1005,6 +1008,7 @@
             document.getElementById('stock-item-form').addEventListener('submit', handleAddOrUpdateStockItem);
             document.getElementById('stock-item-search').addEventListener('input', renderStockItemsPage);
             document.getElementById('stock-item-barcode').addEventListener('input', handleStockBarcodeCheck);
+            document.getElementById('stock-check-barcode-btn').addEventListener('click', handleStockBarcodeCheck);
             document.getElementById('cancel-stock-edit-btn').addEventListener('click', cancelStockEdit);
             
             // Outros Módulos
@@ -1639,9 +1643,14 @@
         }
 
         function handleStockBarcodeCheck(e) {
-            const barcode = e.target.value.trim();
+            const barcode = document.getElementById('stock-item-barcode').value.trim();
+            
+            // Se o formulário estiver em modo de edição manual, não aciona a busca automática.
+            if (document.getElementById('stock-item-form').dataset.editMode === 'true') {
+                return;
+            }
+
             if (!barcode) {
-                if(currentEditingStockItemId && document.getElementById('stock-item-form').dataset.editMode === 'true') return;
                 cancelStockEdit();
                 return;
             };
@@ -1653,7 +1662,6 @@
                 document.getElementById('stock-item-name').readOnly = true;
                 document.getElementById('stock-item-weight').value = existingItem.weight;
                 document.getElementById('stock-item-weight').readOnly = true;
-                document.getElementById('stock-item-barcode').readOnly = true;
                 document.getElementById('stock-item-quantity').placeholder = 'Qtd. a adicionar';
                 document.getElementById('stock-item-quantity').value = '';
                 document.getElementById('stock-item-quantity').focus();
@@ -1662,9 +1670,7 @@
                 currentEditingStockItemId = existingItem.id;
                 document.getElementById('stock-item-form').dataset.editMode = 'false';
             } else {
-                 if (document.getElementById('stock-item-form').dataset.editMode !== 'true') {
-                     cancelStockEdit();
-                 }
+                 cancelStockEdit();
             }
         }
         
@@ -3567,3 +3573,4 @@
     </script>
 </body>
 </html>
+
